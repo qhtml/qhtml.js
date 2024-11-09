@@ -461,7 +461,7 @@ class QComponent extends HTMLElement {
             connectedCallback() {
                 this.replaceSlotContent(["slot"]);
 				try {
-					slots.forEach(function(t_slot) { this.replaceCustomSlotContent(t_slot); });
+					slots.forEach(function(t_slot) { setAttribute(t_slot, encodeURIComponent(this.querySelector(t_slot).innerHTML)); this.replaceCustomSlotContent(t_slot); });
 				} catch {
 					
 				}
@@ -510,3 +510,8 @@ window.addEventListener("DOMContentLoaded", function () {
         var qhtmlEvent = new CustomEvent('QHTMLContentLoaded', {});
     document.dispatchEvent(qhtmlEvent);
 })
+
+window.addEventListener("QHTMLContentLoaded", function() {
+	var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
+    document.dispatchEvent(qhtmlEvent);
+});
