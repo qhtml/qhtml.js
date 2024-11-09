@@ -181,10 +181,31 @@ Result:
           </div>
 	</text-bar>
 
+q-script:
+	
+ 	       <q-html>
+		
+			w3-red,w3-panel,div {
+				id: "myDiv"
+				text: "Hover mouse here to see q-script"
+				style: "min-height: 30%; min-width: 50%;"
+			}
+			
+		</q-html>
+
+	       <q-script>
+			#myDiv.on("mouseover"): {
+				#myDiv.classList.remove("w3-red");
+				#myDiv.classList.add("w3-green");
+			}
+			#myDiv.on("mouseout"): {
+				#myDiv.classList.remove("w3-green");
+				#myDiv.classList.add("w3-red");
+			}
+	        </q-script>
+	
+
 
  Currently planned features for later release:
- - q-script
- - extend q-script support to allow for javascript/q-script to be used directly with QHTML for rapid generation
- - q-query language that will allow for the access of QHTML text before rendering it into HTML, allowing it to be manipulated first
- - Additional q-components as well as integration with q-script and q-query
+ - extend q-script support to create more seamless integration
 
