@@ -402,11 +402,19 @@
 											}
 
 		br {}
-										span { text: "bs-tags.js (boostrap) example"; }
+										span { text: "bs-tags.js (boostrap) simple example"; }
 										code-view {
 										id: "example02";
 										
 											}
+
+		br {}
+										span { text: "bs-tags.js (boostrap) navbar example"; }
+										code-view {
+										id: "example03";
+										
+											}
+			
 											
 										}
 		
@@ -667,6 +675,32 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
     }
 
 }`);
+	document.querySelector("#example03").setCode(`bs-nav,bs-nav-tabs,ul {
+  bs-active,li {
+    a {
+      href: "#";
+      text: "Home";
+    }
+  }
+
+  bs-dropdown,li {
+    bs-dropdown-toggle,a {
+      href: "#";
+      data-toggle: "dropdown";
+      text: "Menu 1 ";
+      bs-caret, span { }
+    }
+
+    bs-dropdown-menu,ul {
+      li { a { href: "#"; text: "Submenu 1-1"; } }
+      li { a { href: "#"; text: "Submenu 1-2"; } }
+      li { a { href: "#"; text: "Submenu 1-3"; } }
+    }
+  }
+
+  li { a { href: "#"; text: "Menu 2"; } }
+  li { a { href: "#"; text: "Menu 3"; } }
+}`);
 	document.querySelector("#example01").setCode(`w3-white,w3-main,w3-panel,div { 
        style: "height: 300px";
 
@@ -802,5 +836,6 @@ customElements.define('code-view', CodeView);
 	</script>
 	</body>
 	</html>
+
 
 
