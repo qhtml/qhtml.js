@@ -1795,6 +1795,8 @@ customElements.define("bs-w-50", createBSCustomElementClass());
 customElements.define("bs-w-75", createBSCustomElementClass());
 customElements.define("bs-w-auto", createBSCustomElementClass());
 customElements.define("bs-was-validated", createBSCustomElementClass());
+customElements.define("bs-col-sm-offset-2", createBSCustomElementClass());
+customElements.define("bs-control-label", createBSCustomElementClass());
 
 (async function() {
 async function loadScriptBlob(url) {
@@ -1868,4 +1870,5 @@ async function loadStylesheet(url) {
 loadStylesheet('bs.css');
 
 })();
+
 
