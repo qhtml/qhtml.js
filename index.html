@@ -676,52 +676,55 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
     }
 
 }`);
-	document.querySelector("#example03").setCode(`bs-nav,bs-nav-tabs,ul {
-  bs-active,li {
-    a {
-      href: "#";
-      text: "Home";
-    }
-  }
+	document.querySelector("#example03").setCode(`bs-form-horizontal,form {
+  action: "/action_page.php";
 
-  bs-dropdown,li {
-    bs-dropdown-toggle,a {
-      href: "#";
-      data-toggle: "dropdown";
-      text: "Menu 1 ";
-      bs-caret,span { 
-	  
+  bs-form-group,div {
+    bs-control-label,bs-col-sm-2,label {
+      for: "email";
+      text: "Email:";
+    }
+    bs-col-sm-10,div {
+      bs-form-control,input {
+        type: "email";
+        id: "email";
+        placeholder: "Enter email";
       }
     }
+  }
 
-    bs-dropdown-menu,ul {
-      li { 
-	  a { 
-   href: "#"; text: "Submenu 1-1"; 
-   } 
-   }
-      li {
-	  a { 
-   href: "#"; text: "Submenu 1-2"; 
-   } 
-   }
-      li { 
-	  a { 
-   href: "#"; text: "Submenu 1-3"; 
-   } 
-	  }
+  bs-form-group,div {
+    bs-control-label,bs-col-sm-2,label {
+      for: "pwd";
+      text: "Password:";
+    }
+    bs-col-sm-10,div {
+      bs-form-control,input {
+        type: "password";
+        id: "pwd";
+        placeholder: "Enter password";
+      }
     }
   }
 
-  li { 
-  a { 
-  href: "#"; text: "Menu 2"; 
+  bs-form-group,div {
+    bs-col-sm-offset-2,bs-col-sm-10,div {
+      bs-checkbox,div {
+        label {
+          input { type: "checkbox"; }
+          text: " Remember me";
+        }
+      }
+    }
   }
-  }
-  li {
-  a {
-  href: "#"; text: "Menu 3"; 
-  } 
+
+  bs-form-group,div {
+    bs-col-sm-offset-2,bs-col-sm-10,div {
+      bs-btn,bs-btn-default,button {
+        type: "submit";
+        text: "Submit";
+      }
+    }
   }
 }`);
 	document.querySelector("#example01").setCode(`w3-white,w3-main,w3-panel,div { 
@@ -859,6 +862,7 @@ customElements.define('code-view', CodeView);
 	</script>
 	</body>
 	</html>
+
 
 
 
