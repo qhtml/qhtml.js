@@ -584,6 +584,8 @@ customElements.define("bs-float-xxl-end", createBSCustomElementClass());
 customElements.define("bs-float-xxl-none", createBSCustomElementClass());
 customElements.define("bs-float-xxl-start", createBSCustomElementClass());
 customElements.define("bs-font-monospace", createBSCustomElementClass());
+customElements.define("bs-form-group", createBSCustomElementClass());
+customElements.define("bs-form-horizontal", createBSCustomElementClass());
 customElements.define("bs-form-check", createBSCustomElementClass());
 customElements.define("bs-form-check-inline", createBSCustomElementClass());
 customElements.define("bs-form-check-input", createBSCustomElementClass());
@@ -1866,3 +1868,4 @@ async function loadStylesheet(url) {
 loadStylesheet('bs.css');
 
 })();
+
