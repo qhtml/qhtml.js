@@ -400,8 +400,16 @@
 										id: "example01";
 										
 											}
+
+		br {}
+										span { text: "bs-tags.js (boostrap) example"; }
+										code-view {
+										id: "example02";
+										
+											}
 											
 										}
+		
 									}
 									
 									div {
@@ -414,8 +422,8 @@
 											text: "Offical Github Repo:"
 											br { }
 											a {
-												href: "https://github.com/mikeNickaloff/qhtml";
-												text: "https://github.com/mikeNickaloff/qhtml";
+												href: "https://github.com/qhtml";
+												text: "https://github.com/qhtml";
 											}
 										}
 									}
@@ -644,7 +652,22 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
 				}
 			}
 		}`
-		
+	document.querySelector("#example02").setCode(`bs-jumbotron,bs-text-center,div {
+   h2 {
+      text: "My First Bootstrap Page"
+   }
+   p {
+     text: "Some Bootstrap buttons:"
+   }
+   bs-btn {
+      bs-btn-primary,button {
+           text: "Primary"
+     }
+    bs-btn-success,button {
+          text: "Success"
+    }
+
+}`);
 	document.querySelector("#example01").setCode(`w3-white,w3-main,w3-panel,div { 
        style: "height: 300px";
 
@@ -780,3 +803,4 @@ customElements.define('code-view', CodeView);
 	</script>
 	</body>
 	</html>
+
