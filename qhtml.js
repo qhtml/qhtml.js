@@ -284,7 +284,7 @@ transformComponentDefinitions(input) {
                         }
                     }
                 }
-                console.log(JSON.stringify(segments))
+              //  console.log(JSON.stringify(segments))
                 return segments;
             }
 
@@ -593,3 +593,4 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
+
