@@ -10,7 +10,7 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 
 - For code editor:  <a href="https://www.datafault.net/qhtml/demo.html">click here!</a>
 - For Official API / Documentation / Examples
-   <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml/</a>
+   <a href="https://www.datafault.net/index.php/qhtml">https://www.datafault.net/index.php/qhtml</a>
 
 **Basic Structure:**
 
@@ -229,5 +229,6 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
