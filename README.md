@@ -66,10 +66,8 @@ Example:
 Important Points:
 
 - The content/text attribute is special in qHTML. It represents the inner text of an element.
-
 - All properties are surrounded with double-quotes and can have anything within the quotes
-- Place scripts in <script> blocks outside of QHTML (for now until q-script is added)
-- Reference script return values using backticks like this... <pre> text: `myscript()` </pre>
+- The HTML element allows you to switch context between q-script and HTML so you can inline HTML into q-html elements.
 
 Example:
 
@@ -229,6 +227,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
