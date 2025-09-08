@@ -101,7 +101,7 @@ Example:
      </q-html>
 
 
-
+-------------
 
 Simplified Nesting
 
@@ -122,6 +122,7 @@ Converted to HTML:
 
             <p><center><a href="https://www.example.com">Visit Example</a></center></p>
 
+-------------------
 
 q-components:
 
@@ -181,6 +182,8 @@ Result:
           </div>
 	</text-bar>
 
+-------------
+
 q-script:
 	
  	       <q-html>
@@ -203,9 +206,28 @@ q-script:
 				#myDiv.classList.add("w3-red");
 			}
 	        </q-script>
+
+---------------
+
+ Inline HTML 
+			
+            <q-html> 
+				  div {
+				   text: "hello world"
+				   html { 
+					   <br> <span> hello again</span>
+				   }
+		
+		        }
+		  </q-html>
+
+ Results: 
+
+          <div>hello world<br><span hello again </span></div>
 	
 
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
