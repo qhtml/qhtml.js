@@ -284,7 +284,7 @@ transformComponentDefinitions(input) {
                         }
                     }
                 }
-              //  console.log(JSON.stringify(segments))
+                console.log(JSON.stringify(segments))
                 return segments;
             }
 
@@ -400,7 +400,15 @@ transformComponentDefinitions(input) {
                 } else {
                     if (segment.type === 'html') {
                         // inject decoded raw HTML directly into the current parent (no wrapper div)
-                        parentElement.insertAdjacentHTML('beforeend', decodeURIComponent(segment.content));
+                        try {
+                            var itm = document.createElement("qdiv");
+                            itm.innerHTML = decodeURIComponent(segment.content);
+                            parentElement.appendChild(itm);
+                        //parentElement.insertAdjacentHTML('beforeend', decodeURIComponent(segment.content));
+                        } catch(err) {
+                            parentElement.innerHTML += decodeURIComponent(segment.content);
+
+                        }
                     }
                     if (segment.type === 'css') {
                         parentElement.setAttribute("style", segment.content);
@@ -593,4 +601,3 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
-
