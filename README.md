@@ -11,6 +11,10 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 - For code editor:  <a href="https://www.datafault.net/qhtml/demo.html">click here!</a>
 - For Official API / Documentation / Examples
    <a href="https://www.datafault.net/index.php/qhtml">https://www.datafault.net/index.php/qhtml</a>
+   
+**Changes**
+- 9/12/2025 - Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. See q-components below...
+
 
 **Basic Structure:**
 
@@ -126,59 +130,78 @@ q-components:
 
    
       q-component {
-	     slots: "custom-slot1,custom-slot2";
+	     
 	     id: "text-bar";
 	     div {
 		class: "w3-bar w3-blue";
 		span {
-		    custom-slot1 {
-
+		    slot {
+               name: "custom-slot1"
 		    }
 		}
-	       div {
-		   custom-slot2 {
-
-		   }
+	       slot {
+		       name: "custom-slot2"		
 	       }
 	    }
       }
 		
 	div {
 	  text-bar {
-	      custom-slot1: "slot 1 text";
-	      custom-slot2: "slot 2 text";
+	      div { 
+	        slot: "custom-slot1"
+		    text: "slot 1 text";
+	     }
+	     div {   
+	       slot: "custom-slot2"
+		   html { slot 2 html }
+	       br { }
+		   span { text: "additional qhtml for custom-slot2" }
 	  }
 	  br { }
 	  text-bar {
-	      custom-slot1: "some other text for slot 1";
-	      custom-slot2: "and the other slot 2 text";
+	      div { 
+	           slot: "custom-slot1"
+	           html { some other html for slot 1 } 
+          }
+	  
+	      div { slot: "custom-slot2" span { } }
 	  
 	  }
 	}
 
 Result:
 
-  	<text-bar custom-slot1="slot 1 text" custom-slot2="slot 2 text">
-            <div class="w3-bar w3-blue">
-	       <span>
-	         <custom-slot1>slot 1 text</custom-slot1>
-	      </span>
-           <div>
-	       <custom-slot2>slot 2 text</custom-slot2>
-	  </div>
-       </div></text-bar>
-       
-       <br>
-       <text-bar custom-slot1="some other text for slot 1" custom-slot2="and the other slot 2 text">
-          <div class="w3-bar w3-blue">
-	    <span>
-               <custom-slot1>some other text for slot 1</custom-slot1>
-	    </span>
-            <div>
-	       <custom-slot2>and the other slot 2 text</custom-slot2>
-	    </div>
-          </div>
-	</text-bar>
+	<div>
+		   <text-bar>
+			   <div slot="custom-slot1">slot 1 text</div>
+			   <div slot="custom-slot2"><qdiv> slot 2 html </qdiv></div>
+			   <br>
+			   <text-bar>
+               <div slot="custom-slot1">
+                   <qdiv> some other html for slot 1 </qdiv>
+                </div>
+                <div slot="custom-slot2">
+				   <span></span>
+                </div>
+            </text-bar>
+        </text-bar>
+        
+    </div><div>
+		   <text-bar>
+			   <div slot="custom-slot1">slot 1 text</div>
+			   <div slot="custom-slot2"><qdiv> slot 2 html </qdiv></div>
+			   <br>
+			   <text-bar>
+               <div slot="custom-slot1">
+                   <qdiv> some other html for slot 1 </qdiv>
+                </div>
+                <div slot="custom-slot2">
+				   <span></span>
+                </div>
+            </text-bar>
+        </text-bar>
+        
+    </div>
 
 -------------
 
@@ -227,6 +250,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
