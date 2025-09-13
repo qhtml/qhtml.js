@@ -131,7 +131,9 @@ Converted to HTML:
 
 **q-components:**
 
-Q-Components now behave just like how HTML5 templates and slots work -- you define slots using `<slot name="some-name">`
+Q-Components now behave just like how HTML5 templates and slots work -- you define slots using 
+
+`<slot name="some-name">`
 
 The only difference is that you don't clone the template node, instead it creates a custom HTML element with the name from the "id" property of the q-component.  
 
@@ -253,6 +255,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
