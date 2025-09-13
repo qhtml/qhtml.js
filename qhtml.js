@@ -58,13 +58,249 @@ class QHtmlElement extends HTMLElement {
 }
 
 // unused for now
+// --- replace the existing transformComponentDefinitions with this version ---
 transformComponentDefinitions(input) {
-    const componentDefRegex = /component\s+(\w+)\s*\{/g;
-        return input.replace(componentDefRegex, (match, componentName, properties) => {
-            // Preserve the properties as they are, just change the component declaration format
-            return `q-component { id: "${componentName}"`;
-            });
+    // 1) Extract all q-component blocks with balanced braces
+    const defs = []; // { id, template }   (template = inner qhtml of the component)
+    let out = input;
+    let idx = 0;
+
+    while (true) {
+        const start = out.indexOf('q-component', idx);
+        if (start === -1) break;
+
+        const open = out.indexOf('{', start);
+        if (open === -1) break;
+
+        const close = findMatchingBrace(out, open);
+        if (close === -1) break;
+
+        const block = out.slice(start, close + 1);
+        const inner = block.slice(block.indexOf('{') + 1, block.lastIndexOf('}'));
+
+        // pull id: "..."
+        const idMatch = inner.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
+        if (idMatch) {
+            const id = idMatch[1];
+
+            // component template is the inner content with top-level id:/slots: removed
+            const template = stripTopLevelProps(inner, ['id', 'slots']).trim();
+
+            defs.push({ id, template });
+
+            // remove the whole q-component block from the document
+            out = out.slice(0, start) + out.slice(close + 1);
+            // move idx back a bit to catch adjacent content safely
+            idx = Math.max(0, start - 1);
+        } else {
+            // no id? skip it safely
+            idx = close + 1;
         }
+    }
+
+    // 2) For each component def, expand invocations:  my-comp { ... }  ->  template with slots filled
+    for (const { id, template } of defs) {
+        let pos = 0;
+        while (true) {
+            // find <id> { ... }
+            const k = findTagInvocation(out, id, pos);
+            if (!k) break;
+
+            const { tagStart, braceOpen, braceClose } = k;
+            const body = out.slice(braceOpen + 1, braceClose);
+
+            // Get top-level child segments of the invocation body (e.g., div { ... }, span { ... }, html { ... })
+            const children = splitTopLevelSegments(body); // [{tag, block}]  where block is the full 'tag { ... }'
+
+            // Build slot->content mapping from children that have a top-level `slot: "name"` property
+            const slotMap = new Map();
+            for (const seg of children) {
+                const slotName = extractTopLevelSlotName(seg.block);
+                if (!slotName) continue;
+
+                // strip the 'slot: "name";' property from the child block for clean injection
+                const cleaned = stripTopLevelProps(seg.block, ['slot']).trim();
+                const existing = slotMap.get(slotName) || '';
+                slotMap.set(slotName, existing + '\n' + cleaned);
+            }
+
+            // Replace template slots:  slot { name: "slot-1" }  with mapped content (or nothing)
+            const expanded = replaceTemplateSlots(template, slotMap);
+
+            // Replace the invocation in the source with the expanded template
+            out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
+
+            // Continue scanning after the inserted template
+            pos = tagStart + expanded.length;
+        }
+    }
+
+    return out;
+
+    // ---------- helpers (scoped inside the same object for minimal diff) ----------
+
+    // find the index of the matching '}' for the '{' at openIdx (supports nesting)
+    function findMatchingBrace(str, openIdx) {
+        let depth = 0;
+        for (let i = openIdx; i < str.length; i++) {
+            const ch = str[i];
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth === 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    // strip specific top-level properties (e.g., id, slots, slot) from a block content
+    // Note: only removes occurrences that are at top-level (not inside nested braces)
+    function stripTopLevelProps(blockContent, propNames) {
+        let out = '';
+        let i = 0, depth = 0, tokenStart = 0;
+
+        // Quick-pass removal using regex for each prop while guarding top-level with a manual scan.
+        // Strategy: split by semicolons at top level, filter props, then rejoin.
+        const parts = [];
+        let cur = '';
+        while (i < blockContent.length) {
+            const ch = blockContent[i];
+            if (ch === '{') { depth++; cur += ch; i++; continue; }
+            if (ch === '}') { depth--; cur += ch; i++; continue; }
+            if (ch === ';' && depth === 0) {
+                parts.push(cur + ';');
+                cur = '';
+                i++;
+                continue;
+            }
+            cur += ch;
+            i++;
+        }
+        if (cur.trim()) parts.push(cur);
+
+        const keep = parts.filter(p => {
+            const m = p.match(/^\s*([a-zA-Z_][\w\-]*)\s*:/);
+            if (!m) return true;
+            return !propNames.includes(m[1]);
+        });
+
+        return keep.join('').trim();
+    }
+
+    // locate `id { ... }` treating id as a tag-like token followed by a balanced block
+    function findTagInvocation(str, id, fromIndex) {
+        // ensure the id is a standalone tag token immediately before a '{'
+        // allow leading whitespace and line breaks
+        const re = new RegExp(`(^|[^\\w-])(${escapeReg(id)})\\s*\\{`, 'g');
+            re.lastIndex = fromIndex || 0;
+            const m = re.exec(str);
+            if (!m) return null;
+
+            const braceOpen = m.index + m[0].lastIndexOf('{');
+            const tagStart = m.index + (m[1] ? 1 : 0);
+            const braceClose = findMatchingBrace(str, braceOpen);
+            if (braceClose === -1) return null;
+
+            return { tagStart, braceOpen, braceClose };
+        }
+
+        function escapeReg(s) {
+            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        // split top-level segments like:   div { ... }  span { ... }  html { ... }
+        function splitTopLevelSegments(body) {
+            const segs = [];
+            let i = 0;
+            while (i < body.length) {
+                // skip whitespace
+                while (i < body.length && /\s/.test(body[i])) i++;
+                if (i >= body.length) break;
+
+                // read tag token up to '{' or ':'
+                let j = i;
+                while (j < body.length && !/[{:]/.test(body[j])) j++;
+                    const token = body.slice(i, j).trim();
+                    if (!token) break;
+
+                    if (body[j] === '{') {
+                        const open = j;
+                        const close = findMatchingBrace(body, open);
+                        if (close === -1) break;
+                        const block = `${token} ${body.slice(open, close + 1)}`;
+                        segs.push({ tag: token, block });
+                        i = close + 1;
+                    } else {
+                        // property (not a child element) — skip to next semicolon at top-level
+                        // This is not a child element; leave it as-is
+                        const semi = body.indexOf(';', j);
+                        if (semi === -1) break;
+                        i = semi + 1;
+                    }
+                }
+                return segs;
+            }
+
+            // read a top-level slot name property from a child block:  <tag> { slot: "name"; ... }
+            function extractTopLevelSlotName(block) {
+                // block looks like:  tag { ... }
+                const brace = block.indexOf('{');
+                if (brace === -1) return '';
+                const inner = block.slice(brace + 1, block.lastIndexOf('}'));
+                // Only inspect top-level; trivial approach: remove nested blocks first
+                const flattened = removeNestedBlocks(inner);
+                const m = flattened.match(/(?:^|\s)slot\s*:\s*"([^"]+)"\s*;?/);
+                return m ? m[1] : '';
+            }
+
+            function removeNestedBlocks(str) {
+                let out = '';
+                let depth = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const ch = str[i];
+                    if (ch === '{') { depth++; continue; }
+                    if (ch === '}') { depth--; continue; }
+                    if (depth === 0) out += ch;
+                }
+                return out;
+            }
+
+            // Replace all template slot placeholders:  slot { name: "slot-1" ... }  -> slotMap.get('slot-1') || ''
+            function replaceTemplateSlots(template, slotMap) {
+                let result = template;
+                let pos = 0;
+
+                while (true) {
+                    // find a 'slot {'
+                    const s = result.indexOf('slot', pos);
+                    if (s === -1) break;
+
+                    // ensure followed by '{' (allow whitespace)
+                    let k = s + 4;
+                    while (k < result.length && /\s/.test(result[k])) k++;
+                    if (result[k] !== '{') { pos = k; continue; }
+
+                    const open = k;
+                    const close = findMatchingBrace(result, open);
+                    if (close === -1) break;
+
+                    const slotBlock = result.slice(s, close + 1);
+                    const inner = result.slice(open + 1, close);
+
+                    // flatten top-level to find name:""
+                    const flattened = removeNestedBlocks(inner);
+                    const m = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
+                    const slotName = m ? m[1] : '';
+
+                    // replace whole slot block
+                    const replacement = slotName && slotMap.has(slotName) ? slotMap.get(slotName) : '';
+                    result = result.slice(0, s) + replacement + result.slice(close + 1);
+                    pos = s + replacement.length;
+                }
+                return result;
+            }
+        }
+
 
         //parse all text and convert this element's contents into HTML
         parseQHtml(qhtml) {
@@ -406,8 +642,9 @@ transformComponentDefinitions(input) {
                             parentElement.appendChild(itm);
                         //parentElement.insertAdjacentHTML('beforeend', decodeURIComponent(segment.content));
                         } catch(err) {
-                             var itm = document.createElement("qdiv");
-                            
+                            console.log(err)
+                            var itm = document.createElement("qdiv");
+                          //  itm.innerHTML = decodeURIComponent(segment.content);
                             parentElement.appendChild(itm);
 
                         }
@@ -602,4 +839,3 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
-
