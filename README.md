@@ -11,9 +11,11 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 - For code editor:  <a href="https://www.datafault.net/qhtml/demo.html">click here!</a>
 - For Official API / Documentation / Examples
    <a href="https://www.datafault.net/index.php/qhtml">https://www.datafault.net/index.php/qhtml</a>
-   
+
+--------------
+
 **Changes**
-- 9/12/2025 - Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. See q-components below...
+- 9/12/2025 - *Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. See q-components below...*
 
 
 **Basic Structure:**
@@ -250,6 +252,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
