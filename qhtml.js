@@ -402,11 +402,13 @@ transformComponentDefinitions(input) {
                         // inject decoded raw HTML directly into the current parent (no wrapper div)
                         try {
                             var itm = document.createElement("qdiv");
-                            itm.innerHTML = decodeURIComponent(segment.content);
+                            itm.innerHTML += decodeURIComponent(segment.content);
                             parentElement.appendChild(itm);
                         //parentElement.insertAdjacentHTML('beforeend', decodeURIComponent(segment.content));
                         } catch(err) {
-                            parentElement.innerHTML += decodeURIComponent(segment.content);
+                             var itm = document.createElement("qdiv");
+                            
+                            parentElement.appendChild(itm);
 
                         }
                     }
@@ -600,3 +602,4 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
+
