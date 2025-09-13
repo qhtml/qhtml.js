@@ -129,8 +129,15 @@ Converted to HTML:
 
 -------------------
 
-q-components:
+**q-components:**
 
+Q-Components now behavior just like how HTML5 templates and slots work -- you define slots using
+      <slot name="some-name">
+
+The only difference is that you don't clone the template node, instead it creates a custom HTML element with the name from the "id" property of the q-component.  
+
+In the example below, q-component creates a new element called "text-bar"  which is then used in the q-html code that follows and the slots are defined using the a slot element, and the contents of the slots are filled whenever the text-bar element is used and has a child element with the property "slot: slot-name"
+	
    
       q-component {
 	     
@@ -150,18 +157,25 @@ q-components:
 		
 	div {
 	  text-bar {
+        /* this entire div wiill now be injected into custom-slot1 of the text-bar q-component */
 	      div { 
+	    
 	        slot: "custom-slot1"
 		    text: "slot 1 text";
 	     }
+	  
+	     /* this entire div wiill now be injected into custom-slot2 of the text-bar q-component because of the slot property  		*/
 	     div {   
+            
 	       slot: "custom-slot2"
+		
 		   html { slot 2 html }
 	       br { }
 		   span { text: "additional qhtml for custom-slot2" }
 	  }
-	  br { }
-	  text-bar {
+    }
+	br { }
+	text-bar {
 	      div { 
 	           slot: "custom-slot1"
 	           html { some other html for slot 1 } 
@@ -170,39 +184,26 @@ q-components:
 	      div { slot: "custom-slot2" span { } }
 	  
 	  }
-	}
+    }
 
 Result:
 
 	<div>
 		   <text-bar>
 			   <div slot="custom-slot1">slot 1 text</div>
-			   <div slot="custom-slot2"><qdiv> slot 2 html </qdiv></div>
+			   <div slot="custom-slot2"> slot 2 html</div>
 			   <br>
-			   <text-bar>
+			 
+        </text-bar>
+		<br>
+        <text-bar>
                <div slot="custom-slot1">
                    <qdiv> some other html for slot 1 </qdiv>
                 </div>
                 <div slot="custom-slot2">
 				   <span></span>
                 </div>
-            </text-bar>
-        </text-bar>
-        
-    </div><div>
-		   <text-bar>
-			   <div slot="custom-slot1">slot 1 text</div>
-			   <div slot="custom-slot2"><qdiv> slot 2 html </qdiv></div>
-			   <br>
-			   <text-bar>
-               <div slot="custom-slot1">
-                   <qdiv> some other html for slot 1 </qdiv>
-                </div>
-                <div slot="custom-slot2">
-				   <span></span>
-                </div>
-            </text-bar>
-        </text-bar>
+      </text-bar>
         
     </div>
 
@@ -253,6 +254,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
