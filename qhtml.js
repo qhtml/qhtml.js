@@ -515,69 +515,68 @@ class QComponent extends HTMLElement {
     }
 
     registerCustomElement(name, content,slots) {
-        const elementClass = this.createCustomElementClass(name, content, slots);
-        customElements.define(name, elementClass);
+        const elementClass = this.createCustomElementClass(name, content, slots)
     }
-
     createCustomElementClass(name, content, slots) {
-        var myAttributes = {
-            "slot": this.innerHTML
-        }
-        slots.forEach(function(attr) { myAttributes[attr] = ""; })
+        var myAttributes = { "slot": this.innerHTML };
+        slots.forEach(function(attr) { myAttributes[attr.trim()] = ""; });
         return class extends HTMLElement {
             constructor() {
                 super();
+                // Lay down template HTML immediately
                 this.innerHTML = content;
-                // Set attributes on the new element
-                //    this.setAttributes(attributes);
             }
             static get observedAttributes() {
                 return ['slot'].concat(slots);
             }
-
             attributeChangedCallback(name, oldValue, newValue) {
                 if (name === 'slot') {
-                    this.replaceSlotContent(["slot"])
+                    this.replaceSlotContent();
                 }
-                if (slots.indexOf(name) != -1) {
-                    this.replaceCustomSlotContent([name])
+                if (slots.indexOf(name) !== -1) {
+                    this.replaceCustomSlotContent(name);
                 }
             }
-
             connectedCallback() {
-                this.replaceSlotContent(["slot"]);
-                try {
-                    slots.forEach(function(t_slot) { setAttribute(t_slot, encodeURIComponent(this.querySelector(t_slot).innerHTML)); this.replaceCustomSlotContent(t_slot); });
-                } catch {
-
-                }
-            }
-
-            setAttributes(attributes) {
-                for (const [key, value] of Object.entries(myAttributes)) {
-                    this.setAttribute(key, value);
-                }
-            }
-
-            replaceSlotContent(attributes) {
-                // Replace the innerHTML of elements with slot attributes matching q-component attributes
-
-                const slotElements = this.querySelectorAll("slot");
-                slotElements.forEach(elem => {
-                    elem.innerHTML = this.getAttribute("slot");
+                // Collect any light-DOM children that specify slot content via attribute: slot="name"
+                const carriers = this.querySelectorAll('[slot]');
+                carriers.forEach(carrier => {
+                    const sName = carrier.getAttribute('slot');
+                    if (!sName) return;
+                    // Save the HTML into the component's attribute (no encoding necessary)
+                    this.setAttribute(sName, carrier.innerHTML);
+                    // Remove the carrier node from the light DOM
+                    carrier.remove();
                 });
 
+                // Now fill default <slot> and custom-named placeholders
+                this.replaceSlotContent();
+                slots.forEach((sName) => {
+                    this.replaceCustomSlotContent(sName);
+                });
             }
-
-
+            replaceSlotContent() {
+                const html = this.getAttribute('slot');
+                if (html == null) return;
+                this.querySelectorAll('slot').forEach(elem => {
+                    elem.innerHTML = html;
+                });
+            }
             replaceCustomSlotContent(slotName) {
-
-                const slotElements = this.querySelectorAll(slotName);
-                slotElements.forEach(elem => {
-                    elem.innerHTML = this.getAttribute(slotName);
+                const html = this.getAttribute(slotName);
+                if (html == null) return;
+                // a) <slot name="slotName">
+                this.querySelectorAll('slot[name="' + slotName + '"]').forEach(elem => {
+                    elem.innerHTML = html;
+                });
+                // b) <slotname> custom tag placeholder
+                this.querySelectorAll(slotName).forEach(elem => {
+                    elem.innerHTML = html;
                 });
             }
         };
+
+
     }
 
 }
