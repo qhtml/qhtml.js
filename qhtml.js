@@ -374,14 +374,12 @@ transformComponentDefinitions(input) {
                             currentProperty.content = encodeURIComponent(htmlString);
                             segments.push(currentProperty);
                             currentProperty = null;
-
-                            // Reset input to process remaining elements/properties
-                            input = input.substring(i + 1);
-                            i = -1; // Reset loop index
+                            //htmlString = "";
+                            // NOTE: do NOT mutate `input` here; allow the for-loop to continue naturally
+                            // The loop will advance past this '}' and keep scanning the remaining siblings.
                             continue;
                         } else {
-                            // Collect raw HTML verbatim until the closing brace
-                            htmlString = htmlString.concat(input[i]);
+                            htmlString += input[i];
                             continue;
                         }
                     }
@@ -635,19 +633,14 @@ transformComponentDefinitions(input) {
                     }
                 } else {
                     if (segment.type === 'html') {
-                        // inject decoded raw HTML directly into the current parent (no wrapper div)
+                        const itm = document.createElement('qdiv');
                         try {
-                            var itm = document.createElement("qdiv");
-                            itm.innerHTML += decodeURIComponent(segment.content);
-                            parentElement.appendChild(itm);
-                        //parentElement.insertAdjacentHTML('beforeend', decodeURIComponent(segment.content));
-                        } catch(err) {
-                            console.log(err)
-                            var itm = document.createElement("qdiv");
-                          //  itm.innerHTML = decodeURIComponent(segment.content);
-                            parentElement.appendChild(itm);
-
+                            itm.innerHTML = decodeURIComponent(segment.content);
+                        } catch {
+                            itm.innerHTML = segment.content;
                         }
+                        parentElement.appendChild(itm);
+                        return;
                     }
                     if (segment.type === 'css') {
                         parentElement.setAttribute("style", segment.content);
@@ -763,7 +756,7 @@ class QComponent extends HTMLElement {
             constructor() {
                 super();
                 // Lay down template HTML immediately
-                this.innerHTML = content;
+                this.innerHTML = +content;
             }
             static get observedAttributes() {
                 return ['slot'].concat(slots);
@@ -798,7 +791,7 @@ class QComponent extends HTMLElement {
                 const html = this.getAttribute('slot');
                 if (html == null) return;
                 this.querySelectorAll('slot').forEach(elem => {
-                    elem.innerHTML = html;
+                    elem.innerHTML += html;
                 });
             }
             replaceCustomSlotContent(slotName) {
@@ -806,7 +799,7 @@ class QComponent extends HTMLElement {
                 if (html == null) return;
                 // a) <slot name="slotName">
                 this.querySelectorAll('slot[name="' + slotName + '"]').forEach(elem => {
-                    elem.innerHTML = html;
+                    elem.innerHTML += html;
                 });
                 // b) <slotname> custom tag placeholder
                 this.querySelectorAll(slotName).forEach(elem => {
