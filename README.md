@@ -160,7 +160,7 @@ In the example below, q-component creates a new element called "text-bar"  which
 	  text-bar {
         
 	      div { 
-	        /* tells q-html to inject this div into custom-slot1 */
+	        comment: "the slot property causes this entire div to be injected into custom-slot1"
 	        slot: "custom-slot1"
 		    text: "slot 1 text";
 	     }
@@ -255,6 +255,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
