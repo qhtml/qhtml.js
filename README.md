@@ -224,25 +224,30 @@ q-script:
 ---------------
 
  Inline HTML 
+ --
+ **Note** 9/13/2025 - For now - inline HTML must be wrapped in another element (can be any element even made up one), but currently adding html tags will cause the parent element's entire tree to be replaced.  This is a known bug and this behavior will be fixed in future versions.
 			
             <q-html> 
 				  div {
 				   text: "hello world"
-				   html { 
-					   <br> <span> hello again</span>
-				   }
+				   span {
+	                  html { 
+					     <br> hello again
+				      }
+		          }
 		
 		        }
 		  </q-html>
 
  Results: 
 
-          <div>hello world<br><span hello again </span></div>
+          <div>hello world<span><br> hello again </span></div>
 	
 
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
