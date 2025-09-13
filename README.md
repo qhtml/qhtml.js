@@ -170,46 +170,31 @@ In the example below, q-component creates a new element called "text-bar"  which
             
 	       slot: "custom-slot2"
 		
-		   html { slot 2 html }
+		   span { 
+	         html { slot 2 html }
+           }
 	       br { }
 		   span { text: "additional qhtml for custom-slot2" }
 	  }
     }
-	br { }
-	text-bar {
-	      div { 
-	           slot: "custom-slot1"
-	           html { some other html for slot 1 } 
-          }
-	  
-	      div { slot: "custom-slot2" span { } }
-	  
-	  }
-    }
+	
 
 Result:
 
 	
 	  <div class="w3-bar w3-blue">
 	    <span>
-	      <div comment="the slot property causes this entire div to be injected into custom-slot1" slot="custom-slot1">slot 1 text</div>
-	    </span>
-	    <div slot="custom-slot2">
-	      <qdiv> slot 2 html </qdiv>
-	    </div>
-	  </div>
-	  <br>
-	  <div class="w3-bar w3-blue">
-	    <span>
-	      <div slot="custom-slot1">
-	        <qdiv> some other html for slot 1 </qdiv>
+	      <div comment="the slot property causes this entire div to be injected into custom-slot1" slot="custom-slot1">
+	         slot 1 text
 	      </div>
 	    </span>
 	    <div slot="custom-slot2">
-	      <span></span>
+	      <span> slot 2 html </span>
+	      <br>
+          <span>additional qhtml for custom-slot2</span>
 	    </div>
 	  </div>
-	</div>
+	
 
 -------------
 
@@ -258,6 +243,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
