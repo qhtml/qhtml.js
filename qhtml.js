@@ -1,5 +1,6 @@
 /* created by mike nickaloff
- * https://www.github.com/mikeNickaloff/qhtml
+ * https://www.github.com/qhtml/qhtml.js
+  version 3.4
  */
 class QHtmlElement extends HTMLElement {
     constructor() {
@@ -841,3 +842,4 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
+
