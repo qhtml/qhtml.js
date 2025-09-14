@@ -632,16 +632,25 @@ transformComponentDefinitions(input) {
                         }
                     }
                 } else {
-                    if (segment.type === 'html') {
-                        const itm = document.createElement('qdiv');
-                        try {
-                            itm.innerHTML = decodeURIComponent(segment.content);
-                        } catch {
-                            itm.innerHTML = segment.content;
-                        }
-                        parentElement.appendChild(itm);
-                        return;
-                    }
+                                    if (segment.type === 'html') {
+                                            // Inline HTML injection: decode the stored HTML string,
+                                            // parse it into a temporary container, and append each
+                                            // resulting node directly into the current parent.  This
+                                            // preserves the exact ordering relative to siblings and
+                                            // avoids wrapping the content in a surrogate element.
+                                            let htmlString;
+                                            try {
+                                                    htmlString = decodeURIComponent(segment.content);
+                                                } catch {
+                                                        htmlString = segment.content;
+                                                    }
+                                                    const tempContainer = document.createElement('div');
+                                                    tempContainer.innerHTML = htmlString;
+                                                    while (tempContainer.firstChild) {
+                                                            parentElement.appendChild(tempContainer.firstChild);
+                                                        }
+                                                        return;
+                                                    }
                     if (segment.type === 'css') {
                         parentElement.setAttribute("style", segment.content);
                     }
