@@ -74,15 +74,15 @@ Important Points:
 
 - The content/text attribute is special in qHTML. It represents the inner text of an element.
 - All properties are surrounded with double-quotes and can have anything within the quotes
-- The HTML element allows you to switch context between q-script and HTML so you can inline HTML into q-html elements.
+- The HTML element allows you to switch context between qhtml and HTML so you can inline HTML into q-html elements.
 
 Example:
 
      <q-html>
       p {
-            content: "This is a paragraph."
+            
             span {
-                   content: "And here is how to handle multiple elements... "                   
+                html { here is some inline html }                  
             } 
            a { 
                href:"#"
@@ -91,17 +91,11 @@ Example:
            }
             span { 
                  id: "mySpan"
-                 content: " and continue learning"
+                html { and here is some inline html }
             }
            
          }
-          script {
-
-             function myFunction() {  
-                  document.querySelector("#mySpan").innerText = " " + Math.random() * 65535; 
-                  alert("clicked!"); 
-              }
-           }
+      
          
      </q-html>
 
@@ -247,6 +241,7 @@ q-script:
 
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
+
 
 
 
