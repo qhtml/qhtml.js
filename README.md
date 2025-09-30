@@ -15,7 +15,9 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 --------------
 
 **Changes**
-- 9/12/2025 - *Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. See q-components below...*
+- 9/29/2025 - *Removed the text, content properties and in their place introduced the `text { }` block which allows for unquoted text insertion at any point in the code*
+- 
+- 9/12/2025 - *Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. slots no longer properties, instead they are defined via  `slot { name: <slot name> }` See q-components below...*
 
 ---------------
 
@@ -29,11 +31,11 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
       <script src="qhtml.js"></script>
        <q-html>
          div {
-              content: "my div"
+              text { my div }
           }
     
            p {
-               content: "my paragraph"
+               text { my paragraph }
            }
          </q-html>
 
@@ -54,10 +56,10 @@ Example:
            div {
               id: "myDiv"
               class: "container"
-              content: "click the button below for a special message"
+              text { click the button below for a special message }
               button {
                   onclick: "alert('hello world')"
-                  content: "click me!"
+                  text { click me! }
                }
            }
       </q-html>
@@ -86,7 +88,7 @@ Example:
             } 
            a { 
                href:"#"
-              content: "Click here!"
+              text { Click here! }
               onclick: "myFunction()"
            }
             span { 
@@ -113,7 +115,7 @@ qHTML:
        <q-html>
          p,center,a {
            href: "https://www.example.com"
-           text: "Visit Example"
+           text { Visit Example }
         }
        </q-html>
 
@@ -156,7 +158,7 @@ In the example below, q-component creates a new element called "text-bar"  which
 	      div { 
 	        comment: "the slot property causes this entire div to be injected into custom-slot1"
 	        slot: "custom-slot1"
-		    text: "slot 1 text";
+		    text { "slot 1 text"; }
 	     }
 	  
 	
@@ -168,7 +170,7 @@ In the example below, q-component creates a new element called "text-bar"  which
 	         html { slot 2 html }
            }
 	       br { }
-		   span { text: "additional qhtml for custom-slot2" }
+		   span { text:  { additional qhtml for custom-slot2 } }
 	  }
     }
 	
@@ -193,42 +195,33 @@ Result:
 -------------
 
 q-script:
-	
- 	       <q-html>
-		
-			w3-red,w3-panel,div {
-				id: "myDiv"
-				text: "Hover mouse here to see q-script"
-				style: "min-height: 30%; min-width: 50%;"
-			}
-			
-		</q-html>
+	   q-script has been temporarily removed starting at v3.7 -- you now must interact with q-html elements via a separate <script></script> tag
+	   this will eventually change - but the scripting will be an entirely different package configuration allowing for Javascript-like code to be injected into event 		   listeners
+	      <q-html>
+		  div { 
+		     id: "my-div"
+	      }
+		  </q-html>
+		  <script>
+		      document.addEventListener("QHTMLContentLoaded", function() { document.querySelector("#my-div").innerHTML = "my div!" } )
+		  </script>
 
-	       <q-script>
-			#myDiv.on("mouseover"): {
-				#myDiv.classList.remove("w3-red");
-				#myDiv.classList.add("w3-green");
-			}
-			#myDiv.on("mouseout"): {
-				#myDiv.classList.remove("w3-green");
-				#myDiv.classList.add("w3-red");
-			}
-	        </q-script>
+	We will be working to improve this in the coming versions and it is a top priority to be able to script within qhtml in a way thats simpler than scripting with plain JS but still has the full capabilities available. Most likely we will add a way to eval javascript or a way to define functions / run code as well as have something like onReady: {  } similar to how ES works. 
+	This will probably eventually replace the legacy onEvent functionality but has to be tested thoroughly and bugs have to be more or less non-existent before we can include it.
 
 ---------------
 
  Inline HTML 
  --
- **Note** 9/13/2025 - For now - inline HTML must be wrapped in another element (can be any element even made up one), but currently adding html tags will cause the parent element's entire tree to be replaced.  This is a known bug and this behavior will be fixed in future versions.
+ **Note** 9/29/2025 - inline HTML now works anywhere that other tags work.
 			
             <q-html> 
 				  div {
-				   text: "hello world"
-				   span {
-	                  html { 
+				   text { hello world }
+	               html { 
 					     <br> hello again
-				      }
-		          }
+				   }
+		          
 		
 		        }
 		  </q-html>
@@ -242,8 +235,10 @@ q-script:
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
 
-
-
+<h2>
+For more explainations, examples, and tools, visit 
+   <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
+</h2>
 
 
 
