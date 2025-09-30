@@ -1,8 +1,14 @@
 /* created by mike nickaloff
- * https://www.github.com/qhtml/qhtml.js
- *  v3.5
- */
-/*
+ * https://www.github.com/mikeNickaloff/qhtml
+ * v3.7 -- 9/29/2025
+ *
+ * Whats new?
+ *  -  Removed text and content properties for all tags. 
+ *  - Added new text { } block that replaces this legacy functionality
+ *  <q-html>
+ *  div {  text { hello world } }
+ *  </q-html>
+ *  -  fixed inline html and text bugs, now both work as expected. 
  *
  * This file has been refactored to break down large procedural blocks
  * into discrete helper functions.  These helpers are defined at the
@@ -351,7 +357,7 @@ function extractPropertiesAndChildren(input) {
   let segmentStart = 0;
   let currentSegment = null; // {type, tag, content, _buf?, _cssDepth?}
 
-  // Per-segment helpers (encapsulate “OOP-ish” state)
+  // Per-segment helpers
   const beginHtml = (tag) => {
     currentSegment = { type: 'html', tag, content: '', _buf: [] };
   };
@@ -374,100 +380,142 @@ function extractPropertiesAndChildren(input) {
     currentSegment = null;
   };
 
+  // NEW: text segment helpers (mirrors html, but we will decode to a text node)
+  const beginText = (tag) => {
+    currentSegment = { type: 'text', tag, content: '', _buf: [] };
+  };
+  const appendText = (ch) => currentSegment && currentSegment._buf.push(ch);
+  const endText = () => {
+    // For symmetry with html/css we URI-encode; will decode at render time.
+    currentSegment.content = encodeURIComponent(currentSegment._buf.join(''));
+    segments.push(currentSegment);
+    currentSegment = null;
+  };
+
   // NOTE: we never mutate `input` while scanning; we just move `i`
   for (let i = 0; i < input.length; i++) {
-    // If we’re inside an inline HTML capture, just accumulate until its closing '}'
+    // Inside inline HTML
     if (currentSegment && currentSegment.type === 'html') {
       if (input[i] === '}') {
+        // End of HTML block: close the segment and decrement nesting level
         endHtml();
-        continue;
+        nestedLevel--;
+        // After closing an inline HTML block at this level, process the rest of the input
+        const rest = input.substring(i + 1);
+        return segments.concat(extractPropertiesAndChildren(rest));
       }
       appendHtml(input[i]);
       continue;
     }
 
-    // If we’re inside an inline CSS capture, track nested braces and accumulate
+    // Inside inline CSS (track nested braces)
     if (currentSegment && currentSegment.type === 'css') {
       const ch = input[i];
-      if (ch === '{') { incCssDepth(); appendCss(ch); continue; }
+      if (ch === '{') {
+        incCssDepth();
+        appendCss(ch);
+        continue;
+      }
       if (ch === '}') {
         decCssDepth();
-        if (currentSegment._cssDepth === 0) { endCss(); }
-        else { appendCss(ch); }
+        if (currentSegment._cssDepth === 0) {
+          // End of CSS block: close the segment and decrement nesting level
+          endCss();
+          nestedLevel--;
+          // After closing an inline CSS block at this level, process the rest of the input
+          const rest = input.substring(i + 1);
+          return segments.concat(extractPropertiesAndChildren(rest));
+        } else {
+          appendCss(ch);
+        }
         continue;
       }
       appendCss(ch);
       continue;
     }
 
-    // Top-level parser for elements/properties at this level
+    // Inside inline TEXT
+    if (currentSegment && currentSegment.type === 'text') {
+      if (input[i] === '}') {
+        // End of text block: close the segment and decrement nesting level
+        endText();
+        nestedLevel--;
+        // After closing an inline TEXT block at this level, process the rest of the input
+        const rest = input.substring(i + 1);
+        return segments.concat(extractPropertiesAndChildren(rest));
+      }
+      appendText(input[i]);
+      continue;
+    }
+
+    // Top-level parser at this nesting level
     const ch = input[i];
 
+    // Opening of a block → decide html/css/text/element
     if (ch === '{') {
       nestedLevel++;
       if (nestedLevel === 1) {
         segmentStart = i + 1;
         const tag = input.substring(0, i).trim();
+
         if (tag === 'html') { beginHtml(tag); continue; }
         if (tag === 'css')  { beginCss(tag); continue; }
+        if (tag === 'text') { beginText(tag); continue; }
+
+        // default element
         currentSegment = { type: 'element', tag, content: '' };
       }
       continue;
     }
 
+    // Closing of current element block
     if (ch === '}') {
       nestedLevel--;
-      if (nestedLevel === 0 && currentSegment !== null) {
+      if (nestedLevel === 0 && currentSegment) {
         currentSegment.content = input.substring(segmentStart, i).trim();
         segments.push(currentSegment);
         currentSegment = null;
 
-        // After closing a top-level segment, advance past whitespace to continue
-        // scanning the remaining siblings. We do NOT mutate `input`.
-        // Find the next non-space and set i accordingly (minus 1 because loop ++).
-        let j = i + 1;
-        while (j < input.length && /\s/.test(input[j])) j++;
-        i = j - 1;
+        // reset for the next sibling at this level
+        const rest = input.substring(i + 1);
+        // we DO NOT mutate input nor reset i; the outer loop continues
+        // but we need the tag prefix to be consumed correctly:
+        // emulate the original behavior by slicing the already-processed
+        // head off and restarting scan on the remainder
+        return segments.concat(extractPropertiesAndChildren(rest));
       }
       continue;
     }
 
-    // Property parsing only at the current level (not inside a nested element)
+    // Property at top level of this invocation
     if (nestedLevel === 0 && ch === ':') {
       const propName = input.substring(0, i).trim();
       let remainder = input.substring(i + 1).trim();
 
+      // Function-body property support: prop: { ... };
       if (remainder.startsWith('{')) {
-        // Function body as { ... } until matching brace
         let braceCount = 0;
-        let endIndex = -1;
-        for (let k = 0; k < remainder.length; k++) {
-          const rch = remainder[k];
-          if (rch === '{') braceCount++;
-          else if (rch === '}') {
-            braceCount--;
-            if (braceCount === 0) { endIndex = k; break; }
-          }
+        let endIndex = 0;
+        for (let j = 0; j < remainder.length; j++) {
+          const c = remainder[j];
+          if (c === '{') braceCount++;
+          else if (c === '}') { braceCount--; if (braceCount === 0) { endIndex = j; break; } }
         }
         const fnBody = remainder.substring(1, endIndex).trim();
-        let after = endIndex + 1;
-        if (remainder[after] === ';') after++;
-
+        let skipIndex = endIndex + 1;
+        if (remainder[skipIndex] === ';') skipIndex++;
         segments.push({ type: 'property', name: propName, value: fnBody, isFunction: true });
-
-        // Skip the consumed part: set i to the position in the original string
-        // corresponding to the end of this property; then continue loop.
-        const consumed = i + 1 + (remainder.substring(0, after).length);
-        i = consumed - 1;
+        const tail = remainder.substring(skipIndex).trim();
+        return segments.concat(extractPropertiesAndChildren(tail));
       } else {
-        const semi = remainder.indexOf(';');
-        if (semi !== -1) {
-          let val = remainder.substring(0, semi).trim();
-          val = val.replace(/^"/, '').replace(/"$/, '');
-          segments.push({ type: 'property', name: propName, value: val });
-
-          const consumed = i + 1 + (semi + 1) + (remainder.substring(semi + 1).match(/^\s*/)?.[0]?.length || 0);
-          i = consumed - 1;
+        // Regular property value to next semicolon
+        const propEnd = remainder.indexOf(';');
+        if (propEnd !== -1) {
+          let propertyValue = remainder.substring(0, propEnd).trim();
+          propertyValue = propertyValue.replace(/^"/, '').replace(/"$/, '');
+          segments.push({ type: 'property', name: propName, value: propertyValue });
+          const tail = remainder.substring(propEnd + 1).trim();
+          return segments.concat(extractPropertiesAndChildren(tail));
         }
       }
     }
@@ -475,6 +523,17 @@ function extractPropertiesAndChildren(input) {
 
   return segments;
 }
+function processTextSegment(segment, parentElement) {
+  let textString;
+  try {
+    textString = decodeURIComponent(segment.content);
+  } catch {
+    textString = segment.content;
+  }
+  // Insert as a pure text node (no wrapper, no HTML parsing)
+  parentElement.appendChild(document.createTextNode(textString));
+}
+
 
 /**
  * Process a property segment.  Handles static properties, content/text
@@ -621,8 +680,19 @@ function processSegment(segment, parentElement) {
         processHtmlSegment(segment, parentElement);
     } else if (segment.type === 'css') {
         processCssSegment(segment, parentElement);
+    } else if (segment.type === 'text') {
+        processTextSegment(segment, parentElement);
     }
 }
+
+// Expose helper functions on the global window object so that parseQHtml can
+// reliably reference the top-level implementations. Without this, nested
+// function definitions hoisted within parseQHtml may shadow the helpers.
+if (typeof window !== 'undefined') {
+    window.extractPropertiesAndChildren = extractPropertiesAndChildren;
+    window.processSegment = processSegment;
+}
+
 class QHtmlElement extends HTMLElement {
     constructor() {
         super();
@@ -913,8 +983,11 @@ transformComponentDefinitions(input) {
         const _preprocessedInput = encodeQuotedStrings(qhtml);
         const _adjustedInput = addClosingBraces(_preprocessedInput);
         const _root = document.createElement('div');
-        const _segments = extractPropertiesAndChildren(_adjustedInput);
-        _segments.forEach(seg => processSegment(seg, _root));
+        // Always use the top-level extract/process helpers rather than any nested versions
+        const _extract = (typeof window !== 'undefined' && window.extractPropertiesAndChildren) ? window.extractPropertiesAndChildren : extractPropertiesAndChildren;
+        const _process = (typeof window !== 'undefined' && window.processSegment) ? window.processSegment : processSegment;
+        const _segments = _extract(_adjustedInput);
+        _segments.forEach(seg => _process(seg, _root));
         return _root.outerHTML;
 
             // Function to find the matching closing brace for each opening brace and add closing braces accordingly
