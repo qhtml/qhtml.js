@@ -1,14 +1,9 @@
 /* created by mike nickaloff
  * https://www.github.com/mikeNickaloff/qhtml
- * v3.7 -- 9/29/2025
- *
- * Whats new?
- *  -  Removed text and content properties for all tags. 
- *  - Added new text { } block that replaces this legacy functionality
- *  <q-html>
- *  div {  text { hello world } }
- *  </q-html>
- *  -  fixed inline html and text bugs, now both work as expected. 
+ * v3.7 
+ * added text { } helper for inline text only
+ * fixed html { } so now both work as expected
+ * removed text: and content: properties but they still work for backwards compatability. 
  *
  * This file has been refactored to break down large procedural blocks
  * into discrete helper functions.  These helpers are defined at the
@@ -51,6 +46,22 @@ function addSemicolonToProperties(input) {
 function replaceBackticksWithQuotes(input) {
     return input.replace(/`([^`]*)`/g, (match, p1) => (eval(p1)));
 }
+
+/**
+ * Backward-compat pre-pass: convert legacy content/text properties into
+ * canonical `text { ... }` blocks so everything flows through the unified
+ * text-segment pipeline. Only converts double-quoted values.
+ *
+ * Examples:
+ *   text: "hello";          ->  text { hello }
+ *   content: "Hi <b>x</b>"; ->  text { Hi <b>x</b> }
+ *   innerText: "foo";       ->  text { foo }
+ */
+function replaceLegacyTextPropsWithTextBlocks(input) {
+    const legacyPropRe = /\b(?:text|content|contents|textcontent|textcontents|innertext)\b\s*:\s*"([^"]*)"\s*;/gi;
+    return input.replace(legacyPropRe, (m, val) => `text { ${val} }`);
+}
+
 
 /**
  * URI-encode quoted segments within the qhtml.  This protects values that
@@ -723,6 +734,7 @@ class QHtmlElement extends HTMLElement {
         // without modifying the core helpers.
         let input = addSemicolonToProperties(i_qhtml);
         input = replaceBackticksWithQuotes(input);
+        input = replaceLegacyTextPropsWithTextBlocks(input);
         return transformComponentDefinitionsHelper(input);
     }
 
