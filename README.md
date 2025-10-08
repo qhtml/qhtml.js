@@ -236,9 +236,10 @@ q-script:
  - extend q-script support to create more seamless integration
 
 <h2>
-For more explainations, examples, and tools, visit 
+For more detailed documentation, examples, and tools, visit 
    <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
 </h2>
+
 
 
 
