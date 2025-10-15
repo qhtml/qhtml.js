@@ -1,6 +1,6 @@
 /* created by mike nickaloff
- * https://www.github.com/mikeNickaloff/qhtml
- * v3.7 
+ * https://www.github.com/qhtml/qhtml.js
+ * v3.9 
  * added text { } helper for inline text only
  * fixed html { } so now both work as expected
  * removed text: and content: properties but they still work for backwards compatability. 
@@ -1777,3 +1777,4 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
+
