@@ -22,6 +22,35 @@
 // possible, each function performs a single task and returns a value.
 
 /**
+ * Emit a formatted log message that is aware of the current component
+ * context.  Centralising logging makes it easier to expand diagnostics in
+ * the future (e.g. to surface warnings in a UI console instead of
+ * `console.*`).
+ *
+ * @param {'warn'|'error'|'info'} level The log severity
+ * @param {string} componentId The component identifier, if any
+ * @param {string} message The message to emit
+ */
+function logComponentIssue(level, componentId, message) {
+    const prefix = componentId ? `[${componentId}] ` : '';
+    const text = `qhtml: ${prefix}${message}`;
+    const logger = console[level] || console.info;
+    logger.call(console, text);
+}
+
+const componentLogger = {
+    warn(componentId, message) {
+        logComponentIssue('warn', componentId, message);
+    },
+    error(componentId, message) {
+        logComponentIssue('error', componentId, message);
+    },
+    info(componentId, message) {
+        logComponentIssue('info', componentId, message);
+    }
+};
+
+/**
  * Add a trailing semicolon to property definitions missing one.  Properties
  * are expressed as `name: "value"` pairs; this helper ensures they are
  * terminated properly for downstream parsing.
@@ -136,27 +165,58 @@ function findMatchingBrace(str, openIdx) {
  * @returns {string} The block content with specified properties removed
  */
 function stripTopLevelProps(blockContent, propNames) {
-    const parts = [];
-    let cur = '';
+    if (!propNames || propNames.length === 0) {
+        return blockContent;
+    }
+    const nameSet = new Set(propNames);
+    let result = '';
     let depth = 0;
-    for (let i = 0; i < blockContent.length; i++) {
+    let i = 0;
+    while (i < blockContent.length) {
         const ch = blockContent[i];
-        if (ch === '{') { depth++; cur += ch; continue; }
-        if (ch === '}') { depth--; cur += ch; continue; }
-        if (ch === ';' && depth === 0) {
-            parts.push(cur + ';');
-            cur = '';
+        if (ch === '{') {
+            depth++;
+            result += ch;
+            i++;
             continue;
         }
-        cur += ch;
+        if (ch === '}') {
+            depth = Math.max(0, depth - 1);
+            result += ch;
+            i++;
+            continue;
+        }
+        if (depth > 0) {
+            result += ch;
+            i++;
+            continue;
+        }
+        const match = blockContent.slice(i).match(/^\s*([a-zA-Z_][\w\-.]*)\s*:/);
+        if (match) {
+            const [full, name] = match;
+            if (nameSet.has(name)) {
+                let j = i + full.length;
+                while (j < blockContent.length && /\s/.test(blockContent[j])) j++;
+                if (blockContent[j] === '"') {
+                    j++;
+                    while (j < blockContent.length) {
+                        if (blockContent[j] === '"' && blockContent[j - 1] !== '\\') {
+                            j++;
+                            break;
+                        }
+                        j++;
+                    }
+                }
+                while (j < blockContent.length && /\s/.test(blockContent[j])) j++;
+                if (blockContent[j] === ';') j++;
+                i = j;
+                continue;
+            }
+        }
+        result += ch;
+        i++;
     }
-    if (cur.trim()) parts.push(cur);
-    const keep = parts.filter(p => {
-        const m = p.match(/^\s*([a-zA-Z_][\w\-]*)\s*:/);
-        if (!m) return true;
-        return !propNames.includes(m[1]);
-    });
-    return keep.join('').trim();
+    return result.trim();
 }
 
 /**
@@ -246,23 +306,6 @@ function removeNestedBlocks(str) {
 }
 
 /**
- * Extract the value of a top-level `slot` property from a child element
- * definition.  If the block does not specify a slot name, returns an
- * empty string.
- *
- * @param {string} block A child element definition
- * @returns {string} The name of the slot, or an empty string
- */
-function extractTopLevelSlotName(block) {
-    const brace = block.indexOf('{');
-    if (brace === -1) return '';
-    const inner = block.slice(brace + 1, block.lastIndexOf('}'));
-    const flattened = removeNestedBlocks(inner);
-    const m = flattened.match(/(?:^|\s)slot\s*:\s*"([^"]+)"\s*;?/);
-    return m ? m[1] : '';
-}
-
-/**
  * Replace slot placeholders in a component template with content provided
  * via `slotMap`.  Slot placeholders have the form `slot { name: "slotName" }`.
  * If a given slot is missing from the map the placeholder is removed.
@@ -271,7 +314,9 @@ function extractTopLevelSlotName(block) {
  * @param {Map<string, string>} slotMap Mapping of slot names to replacement content
  * @returns {string} The template with slot placeholders replaced
  */
-function replaceTemplateSlots(template, slotMap) {
+function replaceTemplateSlots(template, slotMap, options = {}) {
+    const { componentId = '', warnOnMissing = true } = options;
+    const consumedSlots = new Set();
     let result = template;
     let pos = 0;
     while (true) {
@@ -287,11 +332,135 @@ function replaceTemplateSlots(template, slotMap) {
         const flattened = removeNestedBlocks(inner);
         const m = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
         const slotName = m ? m[1] : '';
-        const replacement = slotName && slotMap.has(slotName) ? slotMap.get(slotName) : '';
+        const hasReplacement = slotName && slotMap.has(slotName);
+        if (!hasReplacement && slotName && warnOnMissing) {
+            componentLogger.warn(componentId, `No content provided for slot "${slotName}".`);
+        }
+        const replacement = hasReplacement ? slotMap.get(slotName) : '';
+        if (hasReplacement) {
+            consumedSlots.add(slotName);
+        }
         result = result.slice(0, s) + replacement + result.slice(close + 1);
         pos = s + replacement.length;
     }
+    if (componentId) {
+        for (const [slotName] of slotMap) {
+            if (!consumedSlots.has(slotName)) {
+                componentLogger.warn(componentId, `Slot content was supplied for "${slotName}" but the template does not contain a matching placeholder.`);
+            }
+        }
+    }
     return result;
+}
+
+/**
+ * Collect the names of all slot placeholders defined within a component
+ * template.  The placeholders have the form `slot { name: "slotName" }`.
+ *
+ * @param {string} template Component template text
+ * @returns {Set<string>} A set of slot names referenced in the template
+ */
+function collectTemplateSlotNames(template) {
+    const names = new Set();
+    let pos = 0;
+    while (true) {
+        const idx = template.indexOf('slot', pos);
+        if (idx === -1) break;
+        let cursor = idx + 4;
+        while (cursor < template.length && /\s/.test(template[cursor])) cursor++;
+        if (template[cursor] !== '{') {
+            pos = cursor;
+            continue;
+        }
+        const open = cursor;
+        const close = findMatchingBrace(template, open);
+        if (close === -1) break;
+        const inner = template.slice(open + 1, close);
+        const flattened = removeNestedBlocks(inner);
+        const match = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
+        if (match) {
+            names.add(match[1]);
+        }
+        pos = close + 1;
+    }
+    return names;
+}
+
+/**
+ * Parse the top-level slot directives present within a component invocation
+ * block.  Directives are any property assignment whose name is `slot` or
+ * terminates with `.slot`.
+ *
+ * @param {string} block Component invocation block
+ * @returns {Array<{property: string, value: string}>} Slot directives
+ */
+function extractTopLevelSlotDirectives(block) {
+    const brace = block.indexOf('{');
+    if (brace === -1) return [];
+    const inner = block.slice(brace + 1, block.lastIndexOf('}'));
+    const flattened = removeNestedBlocks(inner);
+    const directives = [];
+    const re = /([a-zA-Z_][\w\-.]*)\s*:\s*"([^"]+)"\s*;?/g;
+    let match;
+    while ((match = re.exec(flattened))) {
+        const propName = match[1];
+        if (propName === 'slot' || propName.endsWith('.slot')) {
+            directives.push({ property: propName, value: match[2] });
+        }
+    }
+    return directives;
+}
+
+/**
+ * Determine which component a slot directive targets and the slot name to
+ * be filled.  The directive may specify the target either via the property
+ * name (`component.slot: "name"`) or within the value itself
+ * (`slot: "component.name"`).  If neither is provided, the current
+ * component is assumed.
+ *
+ * @param {{property: string, value: string}} directive Slot directive descriptor
+ * @param {string} defaultTarget The component assumed when no explicit target exists
+ * @returns {{target: string, slotName: string}}
+ */
+function resolveSlotDirectiveTarget(directive, defaultTarget) {
+    let target = '';
+    let slotName = directive.value.trim();
+    if (directive.property !== 'slot' && directive.property.endsWith('.slot')) {
+        target = directive.property.slice(0, -5);
+    }
+    const dotIndex = slotName.indexOf('.');
+    if (dotIndex !== -1) {
+        const potentialTarget = slotName.slice(0, dotIndex).trim();
+        const potentialSlot = slotName.slice(dotIndex + 1).trim();
+        if (potentialSlot) {
+            if (!target) {
+                target = potentialTarget;
+            }
+            slotName = potentialSlot;
+        }
+    }
+    if (!target) {
+        target = defaultTarget || '';
+    }
+    return { target, slotName };
+}
+
+/**
+ * Remove the specified slot directives from a component invocation block.
+ * Each directive is removed exactly once, preserving the remainder of the
+ * block content for further processing.
+ *
+ * @param {string} block Component invocation block
+ * @param {Array<{property: string, value: string}>} directives Directives to remove
+ * @returns {string} The block without the specified directives
+ */
+function removeSlotDirectivesFromBlock(block, directives) {
+    return directives.reduce((acc, directive) => {
+        const escapedName = escapeReg(directive.property);
+        const escapedValue = escapeReg(directive.value);
+        const pattern = new RegExp(`(\\s*)${escapedName}\\s*:\\s*"${escapedValue}"\\s*;?`);
+        return acc.replace(pattern, '$1');
+    }, block);
 }
 
 /**
@@ -321,14 +490,15 @@ function transformComponentDefinitionsHelper(input) {
         if (idMatch) {
             const id = idMatch[1];
             const template = stripTopLevelProps(inner, ['id', 'slots']).trim();
-            defs.push({ id, template });
+            const slotNames = collectTemplateSlotNames(template);
+            defs.push({ id, template, slotNames });
             out = out.slice(0, start) + out.slice(close + 1);
             idx = Math.max(0, start - 1);
         } else {
             idx = close + 1;
         }
     }
-    for (const { id, template } of defs) {
+    for (const { id, template, slotNames } of defs) {
         let pos = 0;
         while (true) {
             const k = findTagInvocation(out, id, pos);
@@ -338,13 +508,34 @@ function transformComponentDefinitionsHelper(input) {
             const children = splitTopLevelSegments(body);
             const slotMap = new Map();
             for (const seg of children) {
-                const slotName = extractTopLevelSlotName(seg.block);
-                if (!slotName) continue;
-                const cleaned = stripTopLevelProps(seg.block, ['slot']).trim();
-                const existing = slotMap.get(slotName) || '';
-                slotMap.set(slotName, existing + '\n' + cleaned);
+                const directives = extractTopLevelSlotDirectives(seg.block);
+                if (!directives.length) continue;
+                let handled = false;
+                for (const directive of directives) {
+                    const { target, slotName } = resolveSlotDirectiveTarget(directive, id);
+                    if (target !== id || !slotName) {
+                        continue;
+                    }
+                    if (slotNames.size && !slotNames.has(slotName)) {
+                        componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
+                        handled = true;
+                        break;
+                    }
+                    const cleanedBlock = removeSlotDirectivesFromBlock(seg.block, [directive]).trim();
+                    const existing = slotMap.get(slotName) || '';
+                    slotMap.set(slotName, existing + '\n' + cleanedBlock);
+                    handled = true;
+                    break;
+                }
+                if (!handled && directives.length) {
+                    const directive = directives[0];
+                    const { target } = resolveSlotDirectiveTarget(directive, id);
+                    if (target && target !== id) {
+                        componentLogger.warn(id, `Encountered slot directive targeting "${target}". Nested component slot assignment is left untouched.`);
+                    }
+                }
             }
-            const expanded = replaceTemplateSlots(template, slotMap);
+            const expanded = replaceTemplateSlots(template, slotMap, { componentId: id });
             out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
             pos = tagStart + expanded.length;
         }
