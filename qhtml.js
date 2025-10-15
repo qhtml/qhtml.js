@@ -58,6 +58,53 @@ const componentLogger = {
  * @param {string} input Raw qhtml text
  * @returns {string} The input with semicolons appended to property lines
  */
+function stripBlockComments(input) {
+    let result = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let isEscaped = false;
+
+    for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        const next = input[i + 1];
+
+        if (!inSingleQuote && !inDoubleQuote && ch === '/' && next === '*') {
+            i += 2;
+            while (i < input.length) {
+                if (input[i] === '*' && input[i + 1] === '/') {
+                    i += 1;
+                    break;
+                }
+                i++;
+            }
+            continue;
+        }
+
+        result += ch;
+
+        if (isEscaped) {
+            isEscaped = false;
+            continue;
+        }
+
+        if (ch === '\\') {
+            isEscaped = true;
+            continue;
+        }
+
+        if (ch === '"' && !inSingleQuote) {
+            inDoubleQuote = !inDoubleQuote;
+            continue;
+        }
+
+        if (ch === '\'' && !inDoubleQuote) {
+            inSingleQuote = !inSingleQuote;
+        }
+    }
+
+    return result;
+}
+
 function addSemicolonToProperties(input) {
     const regex = /(\w+)\s*:\s*("[^"]*")(?!;)/g;
     return input.replace(regex, "$1: $2;");
@@ -923,7 +970,8 @@ class QHtmlElement extends HTMLElement {
         // expansion in sequence.  See the helper implementations above for
         // details.  Additional preprocessing steps can be inserted here
         // without modifying the core helpers.
-        let input = addSemicolonToProperties(i_qhtml);
+        let input = stripBlockComments(i_qhtml);
+        input = addSemicolonToProperties(input);
         input = replaceBackticksWithQuotes(input);
         input = replaceLegacyTextPropsWithTextBlocks(input);
         return transformComponentDefinitionsHelper(input);
