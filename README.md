@@ -8,29 +8,8 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 
 - Extending qHTML is super easy as well - just define a new custom component and it will become available along with all of its inline attributes without having to even interact with qHTML. 
 
-- For code editor:  <a href="https://www.datafault.net/qhtml/demo.html">click here!</a>
-- A self-contained `<qhtml-editor>` web component is bundled in `qhtml-editor.js`. It provides syntax highlighting, auto-indentation and a live preview for qHTML.
+- For code editor:  <a href="https://qhtml.github.io/qhtml.js/demo.html">  click here!</a>
 
-## `<qhtml-editor>` custom element
-
-To embed the editor inside any page (including CMS blocks that allow HTML/JS), load the scripts for qHTML and the editor, then drop the custom element wherever you need it:
-
-```html
-<script src="qhtml.js"></script>
-<script src="bs-tags.js"></script>
-<script src="w3-tags.js"></script>
-<script src="qhtml-editor.js"></script>
-
-<qhtml-editor>
-w3-bar, w3-black, div {
-    span {
-        text { Hello world }
-    }
-}
-</qhtml-editor>
-```
-
-Every keypress triggers syntax highlighting and updates the preview area using `<q-html>` under the hood. Tags, attributes, q-components, inline HTML and text blocks each receive distinct colors, and the editor keeps indentation aligned with curly braces automatically. When the qHTML is incomplete, the preview keeps the last successful render and surfaces the parsing error so you can continue editing without disruption.
 - For Official API / Documentation / Examples
    <a href="https://www.datafault.net/index.php/qhtml">https://www.datafault.net/index.php/qhtml</a>
 
@@ -261,6 +240,7 @@ q-script:
 For more detailed documentation, examples, and tools, visit 
    <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
 </h2>
+
 
 
 
