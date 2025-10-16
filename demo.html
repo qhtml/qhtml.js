@@ -18,30 +18,10 @@
             class: "w3-container";
             h1 {
                 class: "w3-title";
-                content: "q-html homepage";
+                content: "q-html editor";
             }
-            w3-bar { 
-		w3-blue {
-		   div { class: "tabnav";
-			 a { class: "w3-bar-item w3-button"; content: "Playground"; href: "#"; onclick: "toggleTab('Playground')"; } 
-			 a { class: "w3-bar-item w3-button"; content: "About"; href: "#"; onclick: "toggleTab('Download')"; } 
-			 a { class: "w3-bar-item w3-button"; content: "Download"; href: "#"; onclick: "toggleTab('About')"; } 
-			}
-		}
-	}
-        div { 
-		id: "tab_About"; 
-		class: "w3-card w3-margin w3-hide";
-               	p {
-	              class: "w3-container";
-                      content: "This is the About page";
-               	  }
-	          button {
-        	       class: "w3-btn w3-blue w3-margin";
-			content: "Click Me!";
-			onclick: "openModal()";
-        	  }
-	  }
+            
+        
 	div { id: "tab_Playground"; class: " w3-margin";
                	w3-container {
 	              class: "w3-container";
@@ -55,7 +35,7 @@
 			class: "w3-card w3-large w3-input";
 		}
 		br { }
-
+		hr { }
 		w3-large, w3-h3 {
 				div {
 					content: "Results";
@@ -70,85 +50,8 @@
 		 }
 	          
 	  }
-	div { 
-		id: "tab_Download"; 
-		class: "w3-margin w3-hide";
-               	p {
-	              class: "w3-container";
-                      content: "Download from github";
-	 		br { }
-	 		a {
-				href: "https://www.github.com/mikeNickaloff/qhtml"
-	 			text: "Download"
-	 		} 
-               	  }
-		 table { id: "maintable"; class: "w3-table w3-border-blue w3-grey w3-striped w3-text-black w3-card";
-			th {
-			  content: "Column 1";
-			}
-			th {
-			  content: "Column 2";
-			}
-			th {
-			  content: "column3";
-			}
-			tr {
-				td { content: "asdf"; }
-				td { content: "asdf"; }
-				td { content: "asdf"; }
-			}
-			tr {
-				td { content: "1234"; }
-				td { content: "4567"; }
-				td { content: "7890"; }
-			}
-			tr {
-				td { content: "asdf"; }
-				td { content: "asdf"; }
-				td { content: "asdf"; }
-			}
-		}
-	          button {
-        	       class: "w3-btn w3-blue w3-margin";
-			content: "Click Me!";
-			onclick: "openModal()";
-        	  }
-	  }
-          div {
- 		class: "w3-modal";
-		id: "myModal";
-                div {
-		    id: "myModalContent";
-		    class: "w3-modal-content w3-container w3-card w3-large w3-white w3-padding";
-		    header {
-			class: "w3-header w3-blue w3-bar w3-padding w3-border";
-			content: "my dialog";
-		   }
-		    article {
-			id: "myModalMessage";
-                        class: "w3-container w3-center w3-white w3-normal w3-padding w3-margin";
-			content: "heres my dialog";
-			br {
-
-			}
-			br {
-
-			}
-			span {
-				content: "and an extra span for kicks";
-			}
-	            }
-		    div {
-			class: "w3-footer w3-blue w3-center w3-large w3-padding";
-			button {
-  				 class: "w3-btn w3-blue w3-margin";
-		                 content: "Close";
-				 onclick: "closeModal()";
-			}
-		   }
-		}
-	   }
-        }
+	
+	  
 
     </q-html>
 
@@ -282,3 +185,4 @@ function updateQHTMLFromEditor() {
 </script>
 </body>
 </html>
+
