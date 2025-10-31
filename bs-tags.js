@@ -17,7 +17,7 @@ function createBSCustomElementClass() {
 
             // Iterate over each child
             Array.from(element.children).forEach((child) => {
-                if (child.tagName.startsWith('BS-') || child.tagName.startsWith('W3-')) {
+                if (child.tagName.toUpperCase().startsWith('BS-') || child.tagName.startsWith('W3-')) {
                     // If child is a W3 element, recursively apply classes
                     this.applyClassesRecursively(child, [...classes]);
                 } else {
@@ -37,7 +37,7 @@ function createBSCustomElementClass() {
     };
 }
 
-
+customElements.define("bs-accordion", createBSCustomElementClass());
 customElements.define("bs-accordion-body", createBSCustomElementClass());
 customElements.define("bs-accordion-button", createBSCustomElementClass());
 customElements.define("bs-accordion-collapse", createBSCustomElementClass());
@@ -59,6 +59,11 @@ customElements.define("bs-alert-success", createBSCustomElementClass());
 customElements.define("bs-alert-warning", createBSCustomElementClass());
 customElements.define("bs-align-baseline", createBSCustomElementClass());
 customElements.define("bs-align-bottom", createBSCustomElementClass());
+customElements.define("bs-align-content-*-around", createBSCustomElementClass());
+customElements.define("bs-align-content-*-center", createBSCustomElementClass());
+customElements.define("bs-align-content-*-end", createBSCustomElementClass());
+customElements.define("bs-align-content-*-start", createBSCustomElementClass());
+customElements.define("bs-align-content-*-stretch", createBSCustomElementClass());
 customElements.define("bs-align-content-around", createBSCustomElementClass());
 customElements.define("bs-align-content-between", createBSCustomElementClass());
 customElements.define("bs-align-content-center", createBSCustomElementClass());
@@ -95,6 +100,11 @@ customElements.define("bs-align-content-xxl-center", createBSCustomElementClass(
 customElements.define("bs-align-content-xxl-end", createBSCustomElementClass());
 customElements.define("bs-align-content-xxl-start", createBSCustomElementClass());
 customElements.define("bs-align-content-xxl-stretch", createBSCustomElementClass());
+customElements.define("bs-align-items-*-baseline", createBSCustomElementClass());
+customElements.define("bs-align-items-*-center", createBSCustomElementClass());
+customElements.define("bs-align-items-*-end", createBSCustomElementClass());
+customElements.define("bs-align-items-*-start", createBSCustomElementClass());
+customElements.define("bs-align-items-*-stretch", createBSCustomElementClass());
 customElements.define("bs-align-items-baseline", createBSCustomElementClass());
 customElements.define("bs-align-items-center", createBSCustomElementClass());
 customElements.define("bs-align-items-end", createBSCustomElementClass());
@@ -126,6 +136,11 @@ customElements.define("bs-align-items-xxl-end", createBSCustomElementClass());
 customElements.define("bs-align-items-xxl-start", createBSCustomElementClass());
 customElements.define("bs-align-items-xxl-stretch", createBSCustomElementClass());
 customElements.define("bs-align-middle", createBSCustomElementClass());
+customElements.define("bs-align-self-*-baseline", createBSCustomElementClass());
+customElements.define("bs-align-self-*-center", createBSCustomElementClass());
+customElements.define("bs-align-self-*-end", createBSCustomElementClass());
+customElements.define("bs-align-self-*-start", createBSCustomElementClass());
+customElements.define("bs-align-self-*-stretch", createBSCustomElementClass());
 customElements.define("bs-align-self-auto", createBSCustomElementClass());
 customElements.define("bs-align-self-baseline", createBSCustomElementClass());
 customElements.define("bs-align-self-center", createBSCustomElementClass());
@@ -383,6 +398,17 @@ customElements.define("bs-container-md", createBSCustomElementClass());
 customElements.define("bs-container-sm", createBSCustomElementClass());
 customElements.define("bs-container-xl", createBSCustomElementClass());
 customElements.define("bs-container-xxl", createBSCustomElementClass());
+customElements.define("bs-custom-checkbox", createBSCustomElementClass());
+customElements.define("bs-custom-file", createBSCustomElementClass());
+customElements.define("bs-custom-radio", createBSCustomElementClass());
+customElements.define("bs-custom-range", createBSCustomElementClass());
+customElements.define("bs-custom-select", createBSCustomElementClass());
+customElements.define("bs-custom-switch", createBSCustomElementClass());
+customElements.define("bs-d-*-block", createBSCustomElementClass());
+customElements.define("bs-d-*-flex", createBSCustomElementClass());
+customElements.define("bs-d-*-inline", createBSCustomElementClass());
+customElements.define("bs-d-*-inline-block", createBSCustomElementClass());
+customElements.define("bs-d-*-inline-flex", createBSCustomElementClass());
 customElements.define("bs-d-block", createBSCustomElementClass());
 customElements.define("bs-d-flex", createBSCustomElementClass());
 customElements.define("bs-d-grid", createBSCustomElementClass());
@@ -410,6 +436,7 @@ customElements.define("bs-d-md-table", createBSCustomElementClass());
 customElements.define("bs-d-md-table-cell", createBSCustomElementClass());
 customElements.define("bs-d-md-table-row", createBSCustomElementClass());
 customElements.define("bs-d-none", createBSCustomElementClass());
+customElements.define("bs-d-print-...", createBSCustomElementClass());
 customElements.define("bs-d-print-block", createBSCustomElementClass());
 customElements.define("bs-d-print-flex", createBSCustomElementClass());
 customElements.define("bs-d-print-grid", createBSCustomElementClass());
@@ -472,6 +499,7 @@ customElements.define("bs-dropdown-menu-lg-end", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-lg-start", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-md-end", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-md-start", createBSCustomElementClass());
+customElements.define("bs-dropdown-menu-right", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-sm-end", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-sm-start", createBSCustomElementClass());
 customElements.define("bs-dropdown-menu-start", createBSCustomElementClass());
@@ -482,6 +510,8 @@ customElements.define("bs-dropdown-menu-xxl-start", createBSCustomElementClass()
 customElements.define("bs-dropdown-toggle", createBSCustomElementClass());
 customElements.define("bs-dropdown-toggle-split", createBSCustomElementClass());
 customElements.define("bs-dropend", createBSCustomElementClass());
+customElements.define("bs-dropleft", createBSCustomElementClass());
+customElements.define("bs-dropright", createBSCustomElementClass());
 customElements.define("bs-dropstart", createBSCustomElementClass());
 customElements.define("bs-dropup", createBSCustomElementClass());
 customElements.define("bs-end-0", createBSCustomElementClass());
@@ -493,6 +523,17 @@ customElements.define("bs-figure-caption", createBSCustomElementClass());
 customElements.define("bs-figure-img", createBSCustomElementClass());
 customElements.define("bs-fixed-bottom", createBSCustomElementClass());
 customElements.define("bs-fixed-top", createBSCustomElementClass());
+customElements.define("bs-flex-*-column", createBSCustomElementClass());
+customElements.define("bs-flex-*-column-reverse", createBSCustomElementClass());
+customElements.define("bs-flex-*-grow-0", createBSCustomElementClass());
+customElements.define("bs-flex-*-grow-1", createBSCustomElementClass());
+customElements.define("bs-flex-*-nowrap", createBSCustomElementClass());
+customElements.define("bs-flex-*-row", createBSCustomElementClass());
+customElements.define("bs-flex-*-row-reverse", createBSCustomElementClass());
+customElements.define("bs-flex-*-shrink-0", createBSCustomElementClass());
+customElements.define("bs-flex-*-shrink-1", createBSCustomElementClass());
+customElements.define("bs-flex-*-wrap", createBSCustomElementClass());
+customElements.define("bs-flex-*-wrap-reverse", createBSCustomElementClass());
 customElements.define("bs-flex-column", createBSCustomElementClass());
 customElements.define("bs-flex-column-reverse", createBSCustomElementClass());
 customElements.define("bs-flex-fill", createBSCustomElementClass());
@@ -584,8 +625,6 @@ customElements.define("bs-float-xxl-end", createBSCustomElementClass());
 customElements.define("bs-float-xxl-none", createBSCustomElementClass());
 customElements.define("bs-float-xxl-start", createBSCustomElementClass());
 customElements.define("bs-font-monospace", createBSCustomElementClass());
-customElements.define("bs-form-group", createBSCustomElementClass());
-customElements.define("bs-form-horizontal", createBSCustomElementClass());
 customElements.define("bs-form-check", createBSCustomElementClass());
 customElements.define("bs-form-check-inline", createBSCustomElementClass());
 customElements.define("bs-form-check-input", createBSCustomElementClass());
@@ -785,6 +824,11 @@ customElements.define("bs-invalid-tooltip", createBSCustomElementClass());
 customElements.define("bs-invisible", createBSCustomElementClass());
 customElements.define("bs-is-invalid", createBSCustomElementClass());
 customElements.define("bs-is-valid", createBSCustomElementClass());
+customElements.define("bs-justify-content-*-around", createBSCustomElementClass());
+customElements.define("bs-justify-content-*-between", createBSCustomElementClass());
+customElements.define("bs-justify-content-*-center", createBSCustomElementClass());
+customElements.define("bs-justify-content-*-end", createBSCustomElementClass());
+customElements.define("bs-justify-content-*-start", createBSCustomElementClass());
 customElements.define("bs-justify-content-around", createBSCustomElementClass());
 customElements.define("bs-justify-content-between", createBSCustomElementClass());
 customElements.define("bs-justify-content-center", createBSCustomElementClass());
@@ -1283,6 +1327,7 @@ customElements.define("bs-opacity-100", createBSCustomElementClass());
 customElements.define("bs-opacity-25", createBSCustomElementClass());
 customElements.define("bs-opacity-50", createBSCustomElementClass());
 customElements.define("bs-opacity-75", createBSCustomElementClass());
+customElements.define("bs-order-*-#", createBSCustomElementClass());
 customElements.define("bs-order-0", createBSCustomElementClass());
 customElements.define("bs-order-1", createBSCustomElementClass());
 customElements.define("bs-order-2", createBSCustomElementClass());
@@ -1795,8 +1840,6 @@ customElements.define("bs-w-50", createBSCustomElementClass());
 customElements.define("bs-w-75", createBSCustomElementClass());
 customElements.define("bs-w-auto", createBSCustomElementClass());
 customElements.define("bs-was-validated", createBSCustomElementClass());
-customElements.define("bs-col-sm-offset-2", createBSCustomElementClass());
-customElements.define("bs-control-label", createBSCustomElementClass());
 
 (async function() {
 async function loadScriptBlob(url) {
@@ -1870,5 +1913,3 @@ async function loadStylesheet(url) {
 loadStylesheet('bs.css');
 
 })();
-
-
