@@ -16,7 +16,9 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 --------------
 
 **Changes**
-- 9/29/2025 - *Removed the text, content properties and in their place introduced the `text { }` block which allows for unquoted text insertion at any point in the code*
+
+- 10/31/2025 - Added support for comments using /* */ and support for style { } tags to apply stylesheets to a tag 
+- 9/29/2025 - *introduced the `text { }` block which allows for unquoted text insertion at any point in the code*
 - 
 - 9/12/2025 - *Updated how q-component works which will break any existing implementations of q-component that you may be using for a good cause.. slots no longer properties, instead they are defined via  `slot { name: <slot name> }` See q-components below...*
 
@@ -236,10 +238,36 @@ q-script:
  Currently planned features for later release:
  - extend q-script support to create more seamless integration
 
+
+------------------
+
+CSS Styling
+--
+Use the style tag inside of a block to apply the stylesheet directly to that block's parent item
+```
+<q-html>
+  div { 
+      style { 
+	      width: 100px;
+	       height: 40vh;
+	  }
+	  html { hello world! }
+  }
+
+
+</q-html>
+```
+
+ Resulting output is:
+ ```
+    <div style="width: 100px; height: 40vh;'> hello worlld! </div>
+```
+
 <h2>
 For more detailed documentation, examples, and tools, visit 
    <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
 </h2>
+
 
 
 
