@@ -629,6 +629,18 @@ function extractPropertiesAndChildren(input) {
     currentSegment = null;
   };
 
+  const beginStyleBlock = (tag) => {
+    currentSegment = { type: 'style-block', tag, content: '', _buf: [], _styleDepth: 1 };
+  };
+  const appendStyleBlock = (ch) => currentSegment && currentSegment._buf.push(ch);
+  const incStyleDepth = () => { if (currentSegment) currentSegment._styleDepth++; };
+  const decStyleDepth = () => { if (currentSegment) currentSegment._styleDepth--; };
+  const endStyleBlock = () => {
+    currentSegment.content = currentSegment._buf.join('');
+    segments.push(currentSegment);
+    currentSegment = null;
+  };
+
   // NEW: text segment helpers (mirrors html, but we will decode to a text node)
   const beginText = (tag) => {
     currentSegment = { type: 'text', tag, content: '', _buf: [] };
@@ -683,6 +695,30 @@ function extractPropertiesAndChildren(input) {
       continue;
     }
 
+    // Inside inline STYLE block (track nested braces)
+    if (currentSegment && currentSegment.type === 'style-block') {
+      const ch = input[i];
+      if (ch === '{') {
+        incStyleDepth();
+        appendStyleBlock(ch);
+        continue;
+      }
+      if (ch === '}') {
+        decStyleDepth();
+        if (currentSegment._styleDepth === 0) {
+          endStyleBlock();
+          nestedLevel--;
+          const rest = input.substring(i + 1);
+          return segments.concat(extractPropertiesAndChildren(rest));
+        } else {
+          appendStyleBlock(ch);
+        }
+        continue;
+      }
+      appendStyleBlock(ch);
+      continue;
+    }
+
     // Inside inline TEXT
     if (currentSegment && currentSegment.type === 'text') {
       if (input[i] === '}') {
@@ -710,6 +746,7 @@ function extractPropertiesAndChildren(input) {
         if (tag === 'html') { beginHtml(tag); continue; }
         if (tag === 'css')  { beginCss(tag); continue; }
         if (tag === 'text') { beginText(tag); continue; }
+        if (tag === 'style') { beginStyleBlock(tag); continue; }
 
         // default element
         currentSegment = { type: 'element', tag, content: '' };
@@ -914,6 +951,45 @@ function processCssSegment(segment, parentElement) {
 }
 
 /**
+ * Process a style { } segment.  When invoked within an element, the content
+ * is merged into the element's `style` attribute.  When the parent is the
+ * synthetic root wrapper generated during parsing, the segment is emitted as
+ * a real <style> tag whose text content mirrors the original block.
+ *
+ * @param {object} segment The style block descriptor
+ * @param {HTMLElement} parentElement The parent DOM element
+ */
+function processStyleBlockSegment(segment, parentElement) {
+    if (!parentElement) {
+        return;
+    }
+
+    const content = segment.content;
+
+    if (parentElement.__qhtmlRoot) {
+        const styleElement = document.createElement('style');
+        styleElement.textContent = content;
+        parentElement.appendChild(styleElement);
+        return;
+    }
+
+    const normalized = content.trim();
+    if (!normalized) {
+        return;
+    }
+
+    const existing = parentElement.getAttribute('style');
+    if (existing && existing.trim()) {
+        const trimmedExisting = existing.trim();
+        const needsSemicolon = !trimmedExisting.endsWith(';');
+        const combined = `${trimmedExisting}${needsSemicolon ? ';' : ''} ${normalized}`.trim();
+        parentElement.setAttribute('style', combined);
+    } else {
+        parentElement.setAttribute('style', normalized);
+    }
+}
+
+/**
  * Dispatch processing based on segment type.  Delegates to more specific
  * helpers for properties, elements, HTML and CSS segments.
  *
@@ -929,6 +1005,8 @@ function processSegment(segment, parentElement) {
         processHtmlSegment(segment, parentElement);
     } else if (segment.type === 'css') {
         processCssSegment(segment, parentElement);
+    } else if (segment.type === 'style-block') {
+        processStyleBlockSegment(segment, parentElement);
     } else if (segment.type === 'text') {
         processTextSegment(segment, parentElement);
     }
@@ -1234,6 +1312,7 @@ transformComponentDefinitions(input) {
         const _preprocessedInput = encodeQuotedStrings(qhtml);
         const _adjustedInput = addClosingBraces(_preprocessedInput);
         const _root = document.createElement('div');
+        _root.__qhtmlRoot = true;
         // Always use the top-level extract/process helpers rather than any nested versions
         const _extract = (typeof window !== 'undefined' && window.extractPropertiesAndChildren) ? window.extractPropertiesAndChildren : extractPropertiesAndChildren;
         const _process = (typeof window !== 'undefined' && window.processSegment) ? window.processSegment : processSegment;
