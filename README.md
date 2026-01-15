@@ -11,7 +11,7 @@ I**ntroduction to Quick HTML: *The Quick Inline HyperText Markup Language***
 - For code editor:  <a href="https://qhtml.github.io/qhtml.js/demo.html">  click here!</a>
 
 - For Official API / Documentation / Examples
-   <a href="https://www.datafault.net/index.php/qhtml">https://www.datafault.net/index.php/qhtml</a>
+   <a href="https://datafault.net/qhtml-js/qhtml-about.html">https://www.datafault.net/qhtml-js/qhtml-about.html</a>
 
 --------------
 
@@ -267,6 +267,7 @@ Use the style tag inside of a block to apply the stylesheet directly to that blo
 For more detailed documentation, examples, and tools, visit 
    <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
 </h2>
+
 
 
 
