@@ -265,8 +265,9 @@ Use the style tag inside of a block to apply the stylesheet directly to that blo
 
 <h2>
 For more detailed documentation, examples, and tools, visit 
-   <a href="https://www.datafault.net/qhtml">https://www.datafault.net/qhtml</a>
+   <a href="https://www.datafault.net">https://www.datafault.net</a>
 </h2>
+
 
 
 
