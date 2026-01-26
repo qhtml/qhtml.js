@@ -1,9 +1,16 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v3.9 
- * added text { } helper for inline text only
- * fixed html { } so now both work as expected
- * removed text: and content: properties but they still work for backwards compatability. 
+ * v3.99
+ * - added text { } helper for inline text only
+ * - fixed html { } so now both work as expected
+ * - removed text: and content: properties but they still work for backwards compatability. 
+ * - added style { } tags to support styling  without the need for using a style:  attribute .
+ * div { 
+ *   style { background-color: #00FF33; }
+ * }
+ * 
+ * - also fixed qcomponent bug where slots did not render completely.
+ * - Now can inject text { } and html { } elements as direct children of slots
  *
  * This file has been refactored to break down large procedural blocks
  * into discrete helper functions.  These helpers are defined at the
@@ -545,47 +552,60 @@ function transformComponentDefinitionsHelper(input) {
             idx = close + 1;
         }
     }
-    for (const { id, template, slotNames } of defs) {
-        let pos = 0;
-        while (true) {
-            const k = findTagInvocation(out, id, pos);
-            if (!k) break;
-            const { tagStart, braceOpen, braceClose } = k;
-            const body = out.slice(braceOpen + 1, braceClose);
-            const children = splitTopLevelSegments(body);
-            const slotMap = new Map();
-            for (const seg of children) {
-                const directives = extractTopLevelSlotDirectives(seg.block);
-                if (!directives.length) continue;
-                let handled = false;
-                for (const directive of directives) {
-                    const { target, slotName } = resolveSlotDirectiveTarget(directive, id);
-                    if (target !== id || !slotName) {
-                        continue;
-                    }
-                    if (slotNames.size && !slotNames.has(slotName)) {
-                        componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
+    const maxPasses = Math.max(1, defs.length * 3);
+    let pass = 0;
+    let changed = true;
+
+    while (changed && pass < maxPasses) {
+        changed = false;
+        pass++;
+        for (const { id, template, slotNames } of defs) {
+            let pos = 0;
+            while (true) {
+                const k = findTagInvocation(out, id, pos);
+                if (!k) break;
+                const { tagStart, braceOpen, braceClose } = k;
+                const body = out.slice(braceOpen + 1, braceClose);
+                const children = splitTopLevelSegments(body);
+                const slotMap = new Map();
+                for (const seg of children) {
+                    const directives = extractTopLevelSlotDirectives(seg.block);
+                    if (!directives.length) continue;
+                    let handled = false;
+                    for (const directive of directives) {
+                        const { target, slotName } = resolveSlotDirectiveTarget(directive, id);
+                        if (target !== id || !slotName) {
+                            continue;
+                        }
+                        if (slotNames.size && !slotNames.has(slotName)) {
+                            componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
+                            handled = true;
+                            break;
+                        }
+                        const cleanedBlock = removeSlotDirectivesFromBlock(seg.block, [directive]).trim();
+                        const existing = slotMap.get(slotName) || '';
+                        slotMap.set(slotName, existing + '\n' + cleanedBlock);
                         handled = true;
                         break;
                     }
-                    const cleanedBlock = removeSlotDirectivesFromBlock(seg.block, [directive]).trim();
-                    const existing = slotMap.get(slotName) || '';
-                    slotMap.set(slotName, existing + '\n' + cleanedBlock);
-                    handled = true;
-                    break;
-                }
-                if (!handled && directives.length) {
-                    const directive = directives[0];
-                    const { target } = resolveSlotDirectiveTarget(directive, id);
-                    if (target && target !== id) {
-                        componentLogger.warn(id, `Encountered slot directive targeting "${target}". Nested component slot assignment is left untouched.`);
+                    if (!handled && directives.length) {
+                        const directive = directives[0];
+                        const { target } = resolveSlotDirectiveTarget(directive, id);
+                        if (target && target !== id) {
+                            componentLogger.warn(id, `Encountered slot directive targeting "${target}". Nested component slot assignment is left untouched.`);
+                        }
                     }
                 }
+                const expanded = replaceTemplateSlots(template, slotMap, { componentId: id });
+                out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
+                pos = tagStart + expanded.length;
+                changed = true;
             }
-            const expanded = replaceTemplateSlots(template, slotMap, { componentId: id });
-            out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
-            pos = tagStart + expanded.length;
         }
+    }
+
+    if (changed) {
+        componentLogger.warn('', `Component expansion stopped after ${maxPasses} passes; recursive components may remain.`);
     }
     return out;
 }
