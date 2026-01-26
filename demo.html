@@ -954,16 +954,18 @@ document.addEventListener("QHTMLContentLoaded", function() {
 
 //set the demo playground default code
 	const demoSource = `
+	q-component {
+id: "nav-bar"
+ w3-black,w3-center {       
+ w3-bar-item,w3-btn,w3-hover-grey {     
+ li { html { item 1 } }   
+ li { html { item 2 } }    
+ li { html { item 3 } }                       
+ }                   
+ }
+}
 w3-bar, w3-black, w3-text-white, div {
-    w3-bar-item, w3-left {
-        span {
-            html { Item1 }
-        }
-        span {
-            html { item 2 }
-        }
-
-    }
+   nav-bar { }
 }
 w3-container, w3-large, w3-title {
     w3-header,w3-xlarge,w3-green,div {
@@ -975,8 +977,7 @@ w3-twothird,w3-article, w3-panel, w3-light-grey, blockquote {
             p { 
                 html { Heres a great article about saying hello to the
                         world. only the way everybody else does it -- by
-                        saying hello world... only in latin...  }
-              }
+                        saying hello world... only in latin... okay can i type now hello               } }
       }
 }
 w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
@@ -987,16 +988,11 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
                           li { html { navigation } }
                       }
                     }
-                   w3-black,w3-center {
-                      w3-bar-item {
-                         li { html { item 1 } }
-                         li { html { item 2 } }
-                         li { html { item 3 } }  
-                      }
-                   }
+                  nav-bar { }
                 }
            }
    }
+
 
 `
 
@@ -1018,3 +1014,4 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
