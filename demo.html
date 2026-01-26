@@ -7,7 +7,6 @@
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
-	<script src="bs-tags.js" type="text/javascript"></script> <!-- optional bootstrap-tags addon -->
 <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
     <style>
         code-view:not(:defined) { display: none; }
@@ -666,32 +665,44 @@
                 if (!sel || sel.rangeCount === 0) return 0;
                 const range = sel.getRangeAt(0);
                 if (!container.contains(range.startContainer)) return 0;
-                const node = range.startContainer;
-                if (node.nodeType === Node.TEXT_NODE) {
-                    const parent = node.parentElement;
-                    if (parent && parent.dataset && parent.dataset.idx != null) {
-                        const base = parseInt(parent.dataset.idx, 10);
-                        return base + Math.min(range.startOffset, 1);
-                    }
-                }
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    if (node.dataset && node.dataset.idx != null) {
-                        return parseInt(node.dataset.idx, 10);
-                    }
-                    const child = node.childNodes[range.startOffset] || null;
-                    if (child) {
-                        if (child.nodeType === Node.TEXT_NODE) {
-                            const parent = child.parentElement;
-                            if (parent && parent.dataset && parent.dataset.idx != null) {
-                                return parseInt(parent.dataset.idx, 10);
-                            }
-                        }
-                        if (child.nodeType === Node.ELEMENT_NODE && child.dataset && child.dataset.idx != null) {
-                            return parseInt(child.dataset.idx, 10);
+                const subtreeLength = (node) => {
+                    if (!node) return 0;
+                    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.length;
+                    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return 1;
+                    let total = 0;
+                    node.childNodes.forEach(child => { total += subtreeLength(child); });
+                    return total;
+                };
+                const walker = document.createTreeWalker(
+                    container,
+                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+                    {
+                        acceptNode(node) {
+                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
+                            return NodeFilter.FILTER_SKIP;
                         }
                     }
+                );
+                let offset = 0;
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node === range.startContainer) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            return offset + range.startOffset;
+                        }
+                        return offset;
+                    }
+                    offset += node.nodeType === Node.TEXT_NODE ? node.nodeValue.length : 1;
                 }
-                return this._qhtmlLength || 0;
+                if (range.startContainer.nodeType === Node.ELEMENT_NODE) {
+                    const parent = range.startContainer;
+                    for (let i = 0; i < range.startOffset; i++) {
+                        offset += subtreeLength(parent.childNodes[i]);
+                    }
+                    return offset;
+                }
+                return offset;
             }
 
             _setCaretOffset(container, offset) {
@@ -954,15 +965,15 @@ document.addEventListener("QHTMLContentLoaded", function() {
 
 //set the demo playground default code
 	const demoSource = `
-	q-component {
-id: "nav-bar"
- w3-black,w3-center {       
- w3-bar-item,w3-btn,w3-hover-grey {     
- li { html { item 1 } }   
- li { html { item 2 } }    
- li { html { item 3 } }                       
- }                   
- }
+q-component {
+    id: "nav-bar"
+    w3-black,w3-center {       
+    w3-bar-item,w3-btn,w3-hover-grey {     
+        li { html { item 1 } }   
+       li { html { item 2 } }    
+       li { html { item 3 } }                       
+       }                   
+    }
 }
 w3-bar, w3-black, w3-text-white, div {
    nav-bar { }
@@ -993,7 +1004,6 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
            }
    }
 
-
 `
 
 // end of demo playground code
@@ -1014,4 +1024,3 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
-
