@@ -7,6 +7,7 @@
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
+	<script src="bs-tags.js" type="text/javascript"></script> <!-- optional bootstrap-tags addon -->
 <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
     <style>
         code-view:not(:defined) { display: none; }
@@ -341,6 +342,38 @@
             return out;
         }
 
+        function formatHTML(html) {
+            if (!html) return '';
+            const voidTags = new Set([
+                'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'
+            ]);
+            const normalized = html.replace(/>\s+</g, '><').trim();
+            const lines = normalized.replace(/></g, '>\n<').split('\n');
+            let indent = 0;
+            const pad = (n)=>'  '.repeat(n);
+            const out = [];
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                const isClosing = /^<\/[A-Za-z]/.test(line);
+                const isOpening = /^<[A-Za-z]/.test(line);
+                const isSelfClosing = /\/>$/.test(line);
+                const tagNameMatch = isOpening ? line.match(/^<([A-Za-z0-9:_-]+)/) : null;
+                const tagName = tagNameMatch ? tagNameMatch[1].toLowerCase() : '';
+
+                if (isClosing) {
+                    indent = Math.max(0, indent - 1);
+                }
+
+                out.push(pad(indent) + line);
+
+                if (isOpening && !isClosing && !isSelfClosing && tagName && !voidTags.has(tagName)) {
+                    indent += 1;
+                }
+            }
+            return out.join('\n');
+        }
+
         class CodeView extends HTMLElement {
             constructor() {
                 super();
@@ -355,6 +388,9 @@
                 this._scratchQhtml = null;
                 this._editorId = Math.random().toString(36).slice(2, 8);
                 this._isRendering = false;
+                this._showRenderedHtml = false;
+                this._htmlRaw = '';
+                this._compiledHtmlRaw = '';
             }
 
             connectedCallback() {
@@ -373,10 +409,17 @@
                     ];
                 }
 
-                this._qhtmlIdx = this._tabs.findIndex(t => /qhtml/i.test(t.label));
+                const tabLabel = (t)=>((t.label || '').trim().toLowerCase());
+                this._qhtmlIdx = this._tabs.findIndex(t => tabLabel(t).includes('qhtml'));
                 if (this._qhtmlIdx < 0) this._qhtmlIdx = 0;
-                this._htmlIdx = this._tabs.findIndex(t => /html/i.test(t.label));
+                this._htmlIdx = this._tabs.findIndex(t => tabLabel(t) === 'html');
+                if (this._htmlIdx < 0) {
+                    this._htmlIdx = this._tabs.findIndex(t => tabLabel(t).includes('html') && !tabLabel(t).includes('qhtml'));
+                }
                 if (this._htmlIdx < 0) this._htmlIdx = Math.min(1, this._tabs.length - 1);
+                if (this._htmlIdx === this._qhtmlIdx && this._tabs.length > 1) {
+                    this._htmlIdx = Math.min(1, this._tabs.length - 1);
+                }
 
                 const initial = this._tabs[this._qhtmlIdx] ? this._tabs[this._qhtmlIdx].raw : '';
                 this._previewSelector = this.getAttribute('data-preview') || '';
@@ -431,6 +474,12 @@
                         document.execCommand('insertText', false, text);
                     });
                 }
+                if (this._htmlToggleInput) {
+                    this._htmlToggleInput.addEventListener('change', () => {
+                        this._showRenderedHtml = !!this._htmlToggleInput.checked;
+                        this._updateHtmlTab();
+                    });
+                }
                 this.querySelectorAll('.cv-tab').forEach(btn => {
                     btn.addEventListener('click', () => this._setActive(+btn.dataset.idx));
                 });
@@ -440,6 +489,8 @@
                         let text = '';
                         if (i === this._qhtmlIdx) {
                             text = this._qhtmlSource;
+                        } else if (i === this._htmlIdx) {
+                            text = this._showRenderedHtml ? (this._compiledHtml || '') : (this._htmlOutput || '');
                         } else {
                             text = this._htmlOutput || '';
                         }
@@ -459,6 +510,11 @@
                 const tabsHtml = this._tabs.map((t, i) =>
                     '<button class="cv-tab" role="tab" aria-selected="' + (i===0) + '" data-idx="' + i + '">' + t.label + '</button>'
                 ).join('');
+                const toggleHtml =
+                    '<label class="cv-toggle" data-role="html-toggle">' +
+                        '<input class="cv-toggle-input" type="checkbox">' +
+                        '<span>Rendered HTML</span>' +
+                    '</label>';
 
                 const panelsHtml = this._tabs.map((t, i) => {
                     if (i === this._qhtmlIdx) {
@@ -495,15 +551,20 @@
                         '.cv-editor::selection, .cv-editor span::selection { background: rgba(255,255,255,0.25); }' +
                         '.cv-source { position:absolute; inset:0; opacity:0; pointer-events:none; height:1px; width:1px; }' +
                         '.cv-panel pre { margin:0; min-height:10rem; }' +
+                        '.cv-html pre { white-space: pre-wrap; word-break: break-word; }' +
+                        '.cv-toggle { margin-left:auto; display:none; align-items:center; gap:.4rem; font-size:.75rem; color:#334155; }' +
+                        '.cv-toggle input { accent-color:#2563eb; }' +
                     '</style>' +
                     '<div class="cv" part="container">' +
-                        '<div class="cv-tabs" role="tablist" aria-label="Code tabs">' + tabsHtml + '</div>' +
+                        '<div class="cv-tabs" role="tablist" aria-label="Code tabs">' + tabsHtml + toggleHtml + '</div>' +
                         '<div class="cv-body">' + panelsHtml + '</div>' +
                     '</div>';
 
                 this._qhtmlEditor = this.querySelector('.cv-editor');
                 this._qhtmlSourceArea = this.querySelector('.cv-source');
                 this._htmlCode = this.querySelector('.cv-html code');
+                this._htmlToggle = this.querySelector('.cv-toggle');
+                this._htmlToggleInput = this.querySelector('.cv-toggle-input');
             }
 
             _setActive(i) {
@@ -515,14 +576,23 @@
                     p.style.display = (idx === i) ? '' : 'none';
                     p.setAttribute('aria-hidden', String(idx !== i));
                 });
+                if (this._htmlToggle) {
+                    this._htmlToggle.style.display = (i === this._htmlIdx) ? 'flex' : 'none';
+                }
             }
 
             _updateOutputs() {
-                this._htmlOutput = this._renderHtmlFromQhtml(this._qhtmlSource);
-                if (this._htmlCode) {
-                    this._htmlCode.innerHTML = highlightHTML(this._htmlOutput);
-                }
+                this._htmlRaw = this._renderHtmlFromQhtml(this._qhtmlSource);
+                this._htmlOutput = formatHTML(this._htmlRaw);
+                this._updateHtmlTab();
                 this._updatePreview(this._qhtmlSource);
+            }
+
+            _updateHtmlTab() {
+                if (!this._htmlCode) return;
+                const showCompiled = !!this._showRenderedHtml;
+                const text = showCompiled ? (this._compiledHtml || this._htmlOutput) : this._htmlOutput;
+                this._htmlCode.innerHTML = highlightHTML(text || '');
             }
 
             _renderEditor(text, caretOffset) {
@@ -690,6 +760,18 @@
                 if (typeof this._previewHost.render === 'function') {
                     this._previewHost.render();
                 }
+                this._refreshCompiledHtml();
+            }
+
+            _refreshCompiledHtml() {
+                if (!this._previewHost) return;
+                const schedule = (window.requestAnimationFrame || function(cb){ setTimeout(cb, 0); });
+                schedule(() => {
+                    const raw = this._previewHost.innerHTML || '';
+                    this._compiledHtmlRaw = raw;
+                    this._compiledHtml = formatHTML(raw);
+                    this._updateHtmlTab();
+                });
             }
         }
 
