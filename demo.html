@@ -5,54 +5,840 @@
     <meta name="viewport" content="width=device-width,height=device-height, initial-scale=1.0">
     <title>QHTML Demo</title> 
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
+    <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
 <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
+    <style>
+        code-view:not(:defined) { display: none; }
+        :root{
+            --q-selector:#82aaff;
+            --q-brace:#89ddff;
+            --q-colon:#b0bec5;
+            --q-semi:#b0bec5;
+            --q-prop:#c3e88d;
+            --q-value:#f8f8f2;
+            --q-number:#f2ae49;
+            --q-kw:#c792ea;
+            --q-comma:#b0bec5;
+            --q-comment:#5c6773;
+            --q-embedded:#a0a0ff;
+            --q-class: var(--hl-string);
+            --hl-bg: #0f1220;
+            --hl-fg: #e6e6e6;
+            --hl-tag: #7aa2f7;
+            --hl-angle: #89ddff;
+            --hl-attr: #c3e88d;
+            --hl-eq: #b0bec5;
+            --hl-string: #f78c6c;
+            --hl-comment: #5c6773;
+            --hl-doctype: #ffcb6b;
+            --hl-entity: #c792ea;
+            --hl-text: #e6e6e6;
+        }
+
+        .tok-q-selector{color:var(--q-selector)}
+        .tok-q-class{color:var(--q-class)}
+        .tok-q-brace{color:var(--q-brace)}
+        .tok-q-colon{color:var(--q-colon)}
+        .tok-q-semi{color:var(--q-semi)}
+        .tok-q-prop{color:var(--q-prop)}
+        .tok-q-value{color:var(--q-value)}
+        .tok-q-string{color:var(--hl-string)}
+        .tok-q-number{color:var(--q-number)}
+        .tok-q-kw{color:var(--q-kw)}
+        .tok-q-comma{color:var(--q-comma)}
+        .tok-q-comment{color:var(--q-comment);font-style:italic}
+        .tok-q-embedded{color:var(--q-embedded)}
+
+        pre.code-block {
+            background: var(--hl-bg);
+            color: var(--hl-fg);
+            padding: 1rem;
+            border-radius: 12px;
+            overflow: auto;
+            line-height: 1.5;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 13px;
+            font-variant-ligatures: none;
+            tab-size: 4;
+        }
+        .tok-angle   { color: var(--hl-angle); }
+        .tok-tag     { color: var(--hl-tag); }
+        .tok-attr    { color: var(--hl-attr); }
+        .tok-eq      { color: var(--hl-eq); }
+        .tok-string  { color: var(--hl-string); }
+        .tok-comment { color: var(--hl-comment); font-style: italic; }
+        .tok-doctype { color: var(--hl-doctype); }
+        .tok-entity  { color: var(--hl-entity); }
+        .tok-text    { color: var(--hl-text); }
+    </style>
+    <script>
+        function escapeHTML(s){
+            return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+                .replaceAll('"','&quot;').replaceAll("'","&#39;");
+        }
+        function renderTokens(tokens, opts){
+            const config = opts || {};
+            const classPrefix = config.classPrefix || 'tok-';
+            let out = '';
+            for(const t of tokens){
+                const cls = t.type ? classPrefix + t.type : classPrefix + 'text';
+                out += '<span class="' + cls + '">' + escapeHTML(t.value) + '</span>';
+            }
+            return out;
+        }
+
+        function tokenizeHTML(input){
+            const len = input.length;
+            let i = 0;
+            const tokens = [];
+            const peek = (n=0)=>input[i+n] || '';
+            const take = (n=1)=>{const s=input.slice(i,i+n); i+=n; return s;};
+            const startsWith = (s)=>input.startsWith(s,i);
+            const push = (type,value)=>tokens.push({type,value});
+            const readWhile = (pred)=>{const s=i; while(i<len && pred(input[i])) i++; return input.slice(s,i);};
+
+            function readEntity(){
+                const s=i;
+                if(peek()!=='&') return null;
+                readWhile(c=>c!==';' && c!=='<' && !/\s/.test(c));
+                if(peek()===';') i++;
+                return {type:'entity',value:input.slice(s,i)};
+            }
+            function readComment(){
+                if(!startsWith('<!--')) return null;
+                const s=i;
+                i+=4;
+                while(i<len && !startsWith('-->')) i++;
+                if(startsWith('-->')) i+=3;
+                return {type:'comment',value:input.slice(s,i)};
+            }
+            function readDoctype(){
+                if(!startsWith('<!')) return null;
+                const s=i;
+                i+=2;
+                while(i<len && peek()!=='>' ) i++;
+                if(peek()==='>') i++;
+                return {type:'doctype',value:input.slice(s,i)};
+            }
+            const isTagNameChar=c=>/[A-Za-z0-9:_-]/.test(c);
+            function readString(){
+                const q=peek();
+                if(q!=='"' && q!=="'") return null;
+                let s=take();
+                while(i<len){
+                    const c=take();
+                    s+=c;
+                    if(c===q) break;
+                    if(c==='<'||c==='>') break;
+                }
+                return {type:'string',value:s};
+            }
+            function readTag(){
+                const cmt=readComment();
+                if(cmt) return cmt;
+                const dec=readDoctype();
+                if(dec) return dec;
+                if(peek()!=='<') return null;
+                const start=i;
+                const local=[];
+                if(startsWith('</')) local.push({type:'angle',value:take(2)}); else local.push({type:'angle',value:take(1)});
+                const name=readWhile(isTagNameChar);
+                if(!name){ i=start; return null; }
+                local.push({type:'tag',value:name});
+                while(i<len){
+                    if(/\s/.test(peek())){ local.push({type:'text',value:readWhile(c=>/\s/.test(c))}); continue; }
+                    if(input.startsWith('/>',i)){ local.push({type:'angle',value:take(2)}); break; }
+                    if(peek()==='>'){ local.push({type:'angle',value:take(1)}); break; }
+                    const attr=readWhile(c=>/[^\s/>=]/.test(c));
+                    if(attr) local.push({type:'attr',value:attr}); else { local.push({type:'text',value:take(1)}); continue; }
+                    if(/\s/.test(peek())) local.push({type:'text',value:readWhile(c=>/\s/.test(c))});
+                    if(peek()==='='){
+                        local.push({type:'eq',value:take(1)});
+                        if(/\s/.test(peek())) local.push({type:'text',value:readWhile(c=>/\s/.test(c))});
+                        const str=readString();
+                        if(str) local.push(str); else {
+                            const v=readWhile(c=>!/[\s>]/.test(c));
+                            if(v) local.push({type:'string',value:v});
+                        }
+                    }
+                }
+                tokens.push(...local);
+                return {type:'__tag_done__',value:''};
+            }
+            while(i<len){
+                const ent=readEntity(); if(ent){ tokens.push(ent); continue; }
+                const before=i; const tag=readTag(); if(tag){ continue; }
+                if(i!==before) continue;
+                const text=readWhile(c=>c!=='<' && c!=='&'); if(text) push('text',text); else push('text',take(1));
+            }
+            return tokens.filter(t=>t.type!=='__tag_done__');
+        }
+
+        function tokenizeQHTML(input){
+            const len = input.length;
+            let i = 0;
+            const T = [];
+
+            const peek=(n=0)=>input[i+n] || '';
+            const take=(n=1)=>{const s=input.slice(i,i+n); i+=n; return s;};
+            const startsWith=(s)=>input.startsWith(s,i);
+            const push=(type,value)=>T.push({type,value});
+
+            const isIdentStart=c=>/[A-Za-z_]/.test(c);
+            const isIdent=c=>/[A-Za-z0-9_\-\.]/.test(c);
+
+            const vendorPrefixes = ['w3-','bs-','uk-','mdc-'];
+            const KW = new Set(['component','slot','html','bsl']);
+
+            const skipWS=(opts={consume:true})=>{
+                let j=i, s='', sawNL=false;
+                while(j<len){
+                    const c=input[j];
+                    if(c===' '||c==='\t'||c==='\r'){ s+=c; j++; continue; }
+                    if(c==='\n'){ s+=c; j++; sawNL=true; continue; }
+                    break;
+                }
+                if(opts.consume){ i=j; if(s) push('q-value', s); }
+                return {text:s, sawNL, end:j};
+            };
+
+            function readComment(){
+                if(startsWith('//')){ const s=i; let j=i+2; while(j<len && input[j]!=='\n') j++; i=j; push('q-comment', input.slice(s,i)); return {kind:'//', end:j}; }
+                if(startsWith('/*')){ const s=i; let j=i+2; while(j+1<len && !(input[j]==='*'&&input[j+1]==='/')) j++; j=Math.min(j+2,len); i=j; push('q-comment', input.slice(s,i)); return {kind:'/*', end:j}; }
+                return null;
+            }
+
+            const readNumber=()=>{ if(!/[0-9]/.test(peek())) return null; const s=i; while(i<len && /[0-9._]/.test(peek())) i++; return input.slice(s,i); };
+            const readString=()=>{ const q=peek(); if(q!=='"'&&q!=="'"&&q!=='`') return null; let s=take(); while(i<len){ const c=take(); s+=c; if(c===q) break; if(c==='\\' && i<len){ s+=take(); } } return s; };
+            const readIdent=()=>{ if(!isIdentStart(peek())) return null; const s=i; i++; while(i<len && isIdent(peek())) i++; return input.slice(s,i); };
+
+            const isVendorClass=(name)=>vendorPrefixes.some(p=>name.startsWith(p));
+            const classifySelector=(name)=> KW.has(name) ? 'q-kw' : isVendorClass(name) ? 'q-class' : 'q-selector';
+
+            function readUntilBraceBalanced(openChar='{', closeChar='}'){
+                let depth=1, out='';
+                while(i<len){
+                    const c=take();
+                    if(c===openChar) depth++; else if(c===closeChar){ depth--; if(depth===0) break; }
+                    out+=c;
+                }
+                return out;
+            }
+
+            function shouldBreakPropValue(){
+                let j=i;
+                while(j<len){
+                    const c=input[j];
+                    if(/\s/.test(c)){ j++; continue; }
+                    if(input[j]==='/' && input[j+1]==='/'){ j+=2; while(j<len && input[j]!=='\n') j++; continue; }
+                    if(input[j]==='/' && input[j+1]==='*'){ j+=2; while(j+1<len && !(input[j]==='*'&&input[j+1]==='/')) j++; if(j+1<len) j+=2; continue; }
+                    break;
+                }
+                if(j>=len) return true;
+                if(input[j]==='}') return true;
+
+                if(/[A-Za-z_]/.test(input[j])){
+                    let k=j+1; while(k<len && /[A-Za-z0-9_\-\.]/.test(input[k])) k++;
+                    let k2=k; while(k2<len && /\s/.test(input[k2])) k2++;
+                    const next=input[k2] || '';
+                    const word=input.slice(j,k);
+                    if(next===':' || next==='{' || (word==='html' && next==='{')) return true;
+                }
+                return false;
+            }
+
+            function parseSelectorList(){
+                while(i<len){
+                    skipWS();
+                    const cm = readComment(); if(cm){ continue; }
+                    if(peek()==='{'){ push('q-brace', take()); return true; }
+                    if(peek()===','){ push('q-comma', take()); continue; }
+                    const id = readIdent();
+                    if(id){ push(classifySelector(id), id); continue; }
+                    if(peek()){ push('q-selector', take()); continue; }
+                }
+                return false;
+            }
+
+            function parseBlock(){
+                while(i<len){
+                    skipWS();
+                    const cm = readComment(); if(cm){ continue; }
+                    if(peek()==='}'){ push('q-brace', take()); return; }
+
+                    const name = readIdent();
+                    if(name){
+                        const ws1 = skipWS({consume:false});
+                        if(name==='html' && input[ws1.end]==='{'){
+                            push('q-kw','html'); skipWS(); push('q-brace', take());
+                            const inner = readUntilBraceBalanced('{','}');
+                            const innerSpans = renderTokens(tokenizeHTML(inner));
+                            T.push({type:'q-embedded', value: innerSpans, __rawHTML:true});
+                            push('q-brace','}');
+                            continue;
+                        }
+
+                        skipWS({consume:false});
+                        if(input[i]===':'){
+                            skipWS();
+                            push('q-prop', name);
+                            push('q-colon', take());
+                            while(i<len){
+                                if(shouldBreakPropValue()) break;
+                                skipWS();
+                                const cmt = readComment(); if(cmt){ continue; }
+                                const str = readString(); if(str){ push('q-string', str); continue; }
+                                const num = readNumber(); if(num){ push('q-number', num); continue; }
+                                const idv = readIdent(); if(idv){ push('q-value', idv); continue; }
+                                if(peek()===';'){ push('q-semi', take()); break; }
+                                if(peek()==='}'){ break; }
+                                if(peek()){ push('q-value', take()); continue; }
+                                break;
+                            }
+                            continue;
+                        } else {
+                            push(classifySelector(name), name);
+                            while(i<len){
+                                skipWS();
+                                const c2 = readComment(); if(c2){ continue; }
+                                if(peek()==='{'){ push('q-brace', take()); parseBlock(); break; }
+                                if(peek()===','){ push('q-comma', take()); continue; }
+                                const id2 = readIdent(); if(id2){ push(classifySelector(id2), id2); continue; }
+                                if(peek()){ push('q-selector', take()); continue; }
+                            }
+                            continue;
+                        }
+                    }
+
+                    if(peek()==='{'){ push('q-brace', take()); parseBlock(); continue; }
+                    if(peek()){ push('q-value', take()); continue; }
+                }
+            }
+
+            while(i<len){
+                skipWS();
+                const cm = readComment(); if(cm){ continue; }
+                if(i>=len) break;
+                if(parseSelectorList()){ parseBlock(); } else break;
+            }
+
+            return T;
+        }
+
+        function highlightHTML(code){ return renderTokens(tokenizeHTML(code)); }
+        function highlightQHTML(code){
+            const tokens = tokenizeQHTML(code);
+            let out = '';
+            for(const t of tokens){
+                if(t.__rawHTML){
+                    out += '<span class="tok-q-embedded">' + t.value + '</span>';
+                } else {
+                    const cls = t.type ? 'tok-' + t.type : 'tok-text';
+                    out += '<span class="' + cls + '">' + escapeHTML(t.value) + '</span>';
+                }
+            }
+            return out;
+        }
+
+        class CodeView extends HTMLElement {
+            constructor() {
+                super();
+                this._tabs = [];
+                this._active = 0;
+                this._htmlIdx = 1;
+                this._qhtmlIdx = 0;
+                this._qhtmlSource = '';
+                this._previewSelector = '';
+                this._previewTarget = null;
+                this._previewHost = null;
+                this._scratchQhtml = null;
+                this._editorId = Math.random().toString(36).slice(2, 8);
+                this._isRendering = false;
+            }
+
+            connectedCallback() {
+                const tabNodes = Array.from(this.querySelectorAll('code-view-tab'));
+                if (tabNodes.length) {
+                    this._tabs = tabNodes.map((el, i) => {
+                        const idx = (el.getAttribute('tab') || i) | 0;
+                        const label = el.getAttribute('label') || (idx === 0 ? 'QHTML' : (idx === 1 ? 'HTML' : 'Tab ' + idx));
+                        const raw = (el.textContent || '').trim();
+                        return { idx, label, raw };
+                    });
+                } else {
+                    this._tabs = [
+                        { idx: 0, label: 'QHTML', raw: '' },
+                        { idx: 1, label: 'HTML', raw: '' }
+                    ];
+                }
+
+                this._qhtmlIdx = this._tabs.findIndex(t => /qhtml/i.test(t.label));
+                if (this._qhtmlIdx < 0) this._qhtmlIdx = 0;
+                this._htmlIdx = this._tabs.findIndex(t => /html/i.test(t.label));
+                if (this._htmlIdx < 0) this._htmlIdx = Math.min(1, this._tabs.length - 1);
+
+                const initial = this._tabs[this._qhtmlIdx] ? this._tabs[this._qhtmlIdx].raw : '';
+                this._previewSelector = this.getAttribute('data-preview') || '';
+                this._previewTarget = this._previewSelector ? document.querySelector(this._previewSelector) : null;
+
+                this.innerHTML = '';
+                this._render();
+                this._setActive(this._qhtmlIdx);
+                this._bind();
+                this.setQhtmlSource(initial);
+            }
+
+            setQhtmlSource(text) {
+                this._qhtmlSource = text || '';
+                if (this._qhtmlSourceArea) {
+                    this._qhtmlSourceArea.value = this._qhtmlSource;
+                }
+                this._renderEditor(this._qhtmlSource);
+                this._updateOutputs();
+            }
+
+            getQhtmlSource() {
+                return this._qhtmlSource;
+            }
+
+            _bind() {
+                if (this._qhtmlEditor) {
+                    this._qhtmlEditor.addEventListener('input', () => {
+                        if (this._isRendering) return;
+                        const caret = this._getCaretOffset(this._qhtmlEditor);
+                        this._qhtmlSource = this._readEditorText();
+                        if (this._qhtmlSourceArea) {
+                            this._qhtmlSourceArea.value = this._qhtmlSource;
+                        }
+                        this._renderEditor(this._qhtmlSource, caret);
+                        this._updateOutputs();
+                    });
+                    this._qhtmlEditor.addEventListener('keydown', (event) => {
+                        if (event.key === 'Tab') {
+                            event.preventDefault();
+                            document.execCommand('insertText', false, '  ');
+                            return;
+                        }
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            document.execCommand('insertText', false, '\n');
+                        }
+                    });
+                    this._qhtmlEditor.addEventListener('paste', (event) => {
+                        event.preventDefault();
+                        const text = (event.clipboardData || window.clipboardData).getData('text');
+                        document.execCommand('insertText', false, text);
+                    });
+                }
+                this.querySelectorAll('.cv-tab').forEach(btn => {
+                    btn.addEventListener('click', () => this._setActive(+btn.dataset.idx));
+                });
+                this.querySelectorAll('.cv-copy').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const i = +btn.dataset.idx;
+                        let text = '';
+                        if (i === this._qhtmlIdx) {
+                            text = this._qhtmlSource;
+                        } else {
+                            text = this._htmlOutput || '';
+                        }
+                        try {
+                            await navigator.clipboard.writeText(text);
+                            btn.textContent = 'Copied';
+                            setTimeout(()=>btn.textContent='Copy',1200);
+                        } catch {
+                            btn.textContent = 'Copy failed';
+                            setTimeout(()=>btn.textContent='Copy',1200);
+                        }
+                    });
+                });
+            }
+
+            _render() {
+                const tabsHtml = this._tabs.map((t, i) =>
+                    '<button class="cv-tab" role="tab" aria-selected="' + (i===0) + '" data-idx="' + i + '">' + t.label + '</button>'
+                ).join('');
+
+                const panelsHtml = this._tabs.map((t, i) => {
+                    if (i === this._qhtmlIdx) {
+                        return (
+                            '<div class="cv-panel" role="tabpanel" aria-hidden="' + (i!==0) + '" data-idx="' + i + '" style="' + (i!==0?'display:none;':'') + '">' +
+                                '<button class="cv-copy" data-idx="' + i + '" title="Copy code">Copy</button>' +
+                                '<div class="cv-edit-wrap">' +
+                                    '<div class="cv-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"></div>' +
+                                    '<textarea class="cv-source" aria-hidden="true" tabindex="-1"></textarea>' +
+                                '</div>' +
+                            '</div>'
+                        );
+                    }
+                    return (
+                        '<div class="cv-panel cv-html" role="tabpanel" aria-hidden="' + (i!==0) + '" data-idx="' + i + '" style="' + (i!==0?'display:none;':'') + '">' +
+                            '<button class="cv-copy" data-idx="' + i + '" title="Copy code">Copy</button>' +
+                            '<pre class="code-block"><code class="language-html"></code></pre>' +
+                        '</div>'
+                    );
+                }).join('');
+
+                this.innerHTML = '' +
+                    '<style>' +
+                        ':host { display:block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }' +
+                        '.cv { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background:#fff; }' +
+                        '.cv-tabs { display:flex; align-items:center; gap:2px; background:#f8fafc; padding:6px; flex-wrap:wrap; }' +
+                        '.cv-tab { appearance:none; border:0; background:transparent; padding:.5rem .75rem; border-radius:8px; cursor:pointer; font-weight:300; color:#475569; }' +
+                        '.cv-tab[aria-selected="true"] { background:#fff; box-shadow: 0 1px 0 #e5e7eb inset, 0 -1px 0 #fff inset; color:#111827; }' +
+                        '.cv-body { position:relative; }' +
+                        '.cv-copy { position:absolute; top:.5rem; right:.5rem; font-size:.675rem; background:#111827; color:#fff; border:0; border-radius:8px; padding:.35rem .6rem; cursor:pointer; z-index:3; }' +
+                        '.cv-panel { position:relative; }' +
+                        '.cv-edit-wrap { position:relative; }' +
+                        '.cv-editor { background: var(--hl-bg); color: var(--hl-fg); padding:1rem; border-radius:12px; min-height:10rem; overflow:auto; font:inherit; line-height:1.5; white-space:pre; font-variant-ligatures:none; tab-size:4; outline:none; }' +
+                        '.cv-editor::selection, .cv-editor span::selection { background: rgba(255,255,255,0.25); }' +
+                        '.cv-source { position:absolute; inset:0; opacity:0; pointer-events:none; height:1px; width:1px; }' +
+                        '.cv-panel pre { margin:0; min-height:10rem; }' +
+                    '</style>' +
+                    '<div class="cv" part="container">' +
+                        '<div class="cv-tabs" role="tablist" aria-label="Code tabs">' + tabsHtml + '</div>' +
+                        '<div class="cv-body">' + panelsHtml + '</div>' +
+                    '</div>';
+
+                this._qhtmlEditor = this.querySelector('.cv-editor');
+                this._qhtmlSourceArea = this.querySelector('.cv-source');
+                this._htmlCode = this.querySelector('.cv-html code');
+            }
+
+            _setActive(i) {
+                this._active = i;
+                this.querySelectorAll('.cv-tab').forEach((t, idx) =>
+                    t.setAttribute('aria-selected', String(idx === i))
+                );
+                this.querySelectorAll('.cv-panel').forEach((p, idx) => {
+                    p.style.display = (idx === i) ? '' : 'none';
+                    p.setAttribute('aria-hidden', String(idx !== i));
+                });
+            }
+
+            _updateOutputs() {
+                this._htmlOutput = this._renderHtmlFromQhtml(this._qhtmlSource);
+                if (this._htmlCode) {
+                    this._htmlCode.innerHTML = highlightHTML(this._htmlOutput);
+                }
+                this._updatePreview(this._qhtmlSource);
+            }
+
+            _renderEditor(text, caretOffset) {
+                if (!this._qhtmlEditor) return;
+                this._isRendering = true;
+                this._qhtmlEditor.innerHTML = this._buildEditorHtml(text);
+                if (typeof caretOffset === 'number') {
+                    const limit = (typeof this._qhtmlLength === 'number') ? this._qhtmlLength : caretOffset;
+                    const safeOffset = Math.max(0, Math.min(caretOffset, limit));
+                    this._setCaretOffset(this._qhtmlEditor, safeOffset);
+                }
+                this._isRendering = false;
+            }
+
+            _buildEditorHtml(text) {
+                const tokens = tokenizeQHTML(text);
+                let idx = 0;
+                let out = '';
+                for (const token of tokens) {
+                    let value = token.value || '';
+                    if (token.__rawHTML) {
+                        const tmp = document.createElement('div');
+                        tmp.innerHTML = value;
+                        value = tmp.textContent || '';
+                    }
+                    const cls = token.type ? 'tok-' + token.type : 'tok-text';
+                    for (const ch of value) {
+                        if (ch === '\n') {
+                            out += '<br data-idx="' + idx + '" id="cvch-' + this._editorId + '-' + idx + '">';
+                            idx++;
+                            continue;
+                        }
+                        out += '<span id="cvch-' + this._editorId + '-' + idx + '" data-idx="' + idx + '" class="' + cls + '">' + escapeHTML(ch) + '</span>';
+                        idx++;
+                    }
+                }
+                if (!out || text.endsWith('\n')) {
+                    out += '<span class="tok-text cv-empty" data-empty="1"></span>';
+                }
+                this._qhtmlLength = idx;
+                return out;
+            }
+
+            _readEditorText() {
+                if (!this._qhtmlEditor) return '';
+                const walker = document.createTreeWalker(
+                    this._qhtmlEditor,
+                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+                    {
+                        acceptNode(node) {
+                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
+                            return NodeFilter.FILTER_SKIP;
+                        }
+                    }
+                );
+                let out = '';
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        out += node.nodeValue;
+                    } else if (node.tagName === 'BR') {
+                        out += '\n';
+                    }
+                }
+                return out;
+            }
+
+            _getCaretOffset(container) {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0) return 0;
+                const range = sel.getRangeAt(0);
+                if (!container.contains(range.startContainer)) return 0;
+                const node = range.startContainer;
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const parent = node.parentElement;
+                    if (parent && parent.dataset && parent.dataset.idx != null) {
+                        const base = parseInt(parent.dataset.idx, 10);
+                        return base + Math.min(range.startOffset, 1);
+                    }
+                }
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.dataset && node.dataset.idx != null) {
+                        return parseInt(node.dataset.idx, 10);
+                    }
+                    const child = node.childNodes[range.startOffset] || null;
+                    if (child) {
+                        if (child.nodeType === Node.TEXT_NODE) {
+                            const parent = child.parentElement;
+                            if (parent && parent.dataset && parent.dataset.idx != null) {
+                                return parseInt(parent.dataset.idx, 10);
+                            }
+                        }
+                        if (child.nodeType === Node.ELEMENT_NODE && child.dataset && child.dataset.idx != null) {
+                            return parseInt(child.dataset.idx, 10);
+                        }
+                    }
+                }
+                return this._qhtmlLength || 0;
+            }
+
+            _setCaretOffset(container, offset) {
+                const sel = window.getSelection();
+                if (!sel) return;
+                const range = document.createRange();
+                let remaining = offset;
+                const walker = document.createTreeWalker(
+                    container,
+                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+                    {
+                        acceptNode(node) {
+                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
+                            return NodeFilter.FILTER_SKIP;
+                        }
+                    }
+                );
+                let node;
+                while ((node = walker.nextNode())) {
+                    const len = node.nodeType === Node.TEXT_NODE ? node.nodeValue.length : 1;
+                    if (remaining <= len) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            range.setStart(node, remaining);
+                        } else {
+                            range.setStartAfter(node);
+                        }
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        return;
+                    }
+                    remaining -= len;
+                }
+                range.selectNodeContents(container);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+
+            _renderHtmlFromQhtml(source) {
+                if (!source) return '';
+                const qhtml = source.trim().replace(/^"|"$/g, '');
+                const scratch = this._scratchQhtml || document.createElement('q-html');
+                this._scratchQhtml = scratch;
+                if (typeof scratch.preprocess !== 'function' || typeof scratch.parseQHtml !== 'function') {
+                    return source;
+                }
+                const pre = scratch.preprocess(qhtml);
+                const html = scratch.parseQHtml(pre);
+                const regex = /"{1}([^\"]*)"{1}/mg;
+                return html.replace(regex, (match, p1) => '"' + decodeURIComponent(p1) + '"');
+            }
+
+            _updatePreview(source) {
+                if (!this._previewTarget && this._previewSelector) {
+                    this._previewTarget = document.querySelector(this._previewSelector);
+                }
+                if (!this._previewTarget) return;
+                if (!this._previewHost || !this._previewTarget.contains(this._previewHost)) {
+                    this._previewTarget.innerHTML = '';
+                    this._previewHost = document.createElement('q-html');
+                    this._previewTarget.appendChild(this._previewHost);
+                }
+                this._previewHost.innerHTML = source;
+                if (typeof this._previewHost.render === 'function') {
+                    this._previewHost.render();
+                }
+            }
+        }
+
+        customElements.define('code-view', CodeView);
+    </script>
 
 </head>
 <body>
     <!-- Sample usage of the q-html component to make the whole page -->
 
  <q-html>
-	
+ div {
         w3-card {
-            class: "w3-container";
+            class: "w3-container"
             h1 {
-                class: "w3-title";
-                content: "q-html editor";
+                class: "w3-title"
+                html { "q-html homepage" }
             }
-            
-        
-	div { id: "tab_Playground"; class: " w3-margin";
-               	w3-container {
-	              class: "w3-container";
-                      content: "This is a playground for testing qhtml";
+            w3-bar { 
+		w3-blue {
+		   div { class: "tabnav"
+			 a { class: "w3-bar-item w3-button" html { "Playground" } href: "#" onclick: "toggleTab('Playground')" }
+			 a { class: "w3-bar-item w3-button" html { "About" } href: "#" onclick: "toggleTab('Download')" }
+			 a { class: "w3-bar-item w3-button" html { "Download" } href: "#" onclick: "toggleTab('About')" }
+			}
+		}
+	}
+        div { 
+		id: "tab_About"
+		class: "w3-card w3-margin w3-hide"
+               	p {
+	              class: "w3-container"
+                      html { "This is the About page" }
                	  }
-		p { content: "Enter your qHTML Code below" }
-		TextArea {
-			id: "qhtmlEditor";
-			onKeyUp: "updateQHTMLFromEditor()";
-			content: "";
-			class: "w3-card w3-large w3-input";
+	          button {
+        	       class: "w3-btn w3-blue w3-margin"
+			html { "Click Me!" }
+			onclick: "openModal()"
+        	  }
+	  }
+	div { id: "tab_Playground" class: " w3-margin"
+               	w3-container {
+	              class: "w3-container"
+                      html { "This is a playground for testing qhtml" }
+               	  }
+		p { html { "Enter your qHTML Code below" } }
+		code-view {
+			id: "qhtmlCodeView"
+			class: "w3-card"
+			data-preview: "#qhtmlPreview";
+			code-view-tab { tab: "0" label: "QHTML" }
+			code-view-tab { tab: "1" label: "HTML" }
 		}
 		br { }
-		hr { }
+
 		w3-large, w3-h3 {
 				div {
-					content: "Results";
+					html { "Preview" }
 				}
 			}
 		w3-card { 
 			w3-wide {
 				div {
-					id: "qhtmlPreview";
+					id: "qhtmlPreview"
 				}
 			}
 		 }
 	          
 	  }
-	
-	  
+	div { 
+		id: "tab_Download"
+		class: "w3-margin w3-hide"
+               	p {
+	              class: "w3-container"
+                      html { "Download from github" }
+	 		br { }
+	 		a {
+				href: "https://www.github.com/mikeNickaloff/qhtml"
+	 			html { Download }
+	 		} 
+               	  }
+		 table { id: "maintable" class: "w3-table w3-border-blue w3-grey w3-striped w3-text-black w3-card"
+			th {
+			  html { "Column 1" }
+			}
+			th {
+			  html { "Column 2" }
+			}
+			th {
+			  html { "column3" }
+			}
+			tr {
+				td { html { "asdf" } }
+				td { html { "asdf" } }
+				td { html { "asdf" } }
+			}
+			tr {
+				td { html { "1234" } }
+				td { html { "4567" } }
+				td { html { "7890" } }
+			}
+			tr {
+				td { html { "asdf" } }
+				td { html { "asdf" } }
+				td { html { "asdf" } }
+			}
+		}
+	          button {
+        	       class: "w3-btn w3-blue w3-margin"
+			html { "Click Me!" }
+			onclick: "openModal()"
+        	  }
+	  }
+          div {
+ 		class: "w3-modal"
+		id: "myModal"
+                div {
+		    id: "myModalContent"
+		    class: "w3-modal-content w3-container w3-card w3-large w3-white w3-padding"
+		    header {
+			class: "w3-header w3-blue w3-bar w3-padding w3-border"
+			html { "my dialog" }
+		   }
+		    article {
+			id: "myModalMessage"
+                        class: "w3-container w3-center w3-white w3-normal w3-padding w3-margin"
+			html { "heres my dialog" }
+			br {
 
+			}
+			br {
+
+			}
+			span {
+				html { "and an extra span for kicks" }
+			}
+	            }
+		    div {
+			class: "w3-footer w3-blue w3-center w3-large w3-padding"
+			button {
+  				 class: "w3-btn w3-blue w3-margin"
+		                 html { "Close" }
+				 onclick: "closeModal()"
+			}
+		   }
+		}
+	   }
+        }
+}
     </q-html>
 
 
@@ -64,7 +850,7 @@
 	}
 
 	textarea {
-		min-height: 40vh;
+		min-height: 40vh
 	}
 </style>
 <script>
@@ -72,16 +858,16 @@
 /* modal dialog */
 
 function openModal() {
-	document.querySelector("#myModal").style.display = 'block';
+	document.querySelector("#myModal").style.display = 'block'
 }
 function closeModal() {
-	document.querySelector("#myModal").style.display = 'none';
+	document.querySelector("#myModal").style.display = 'none'
 }
 
 // document.querySelector / document.querySelectorAll 
 // convenience aliases not part of qhtml
 
-function qOne(sel) { return document.querySelector(sel); }
+function qOne(sel) { return document.querySelector(sel) }
 function qAll(sel) { return document.querySelectorAll(sel) }
 
 /* Tab handling */
@@ -89,7 +875,7 @@ function qAll(sel) { return document.querySelectorAll(sel) }
 // tranform DOM Element List into Javascript Array and map the result of func(element) for each element
 // used only for tab switching not part of qhtml
 function mapFunc(list, func) {
-	var tmap = [];
+	var tmap = []
 	list.forEach(function(tm) { tmap.push(tm) })
 	return tmap.map(function(item) { return func(item) })
 }
@@ -98,7 +884,7 @@ function mapFunc(list, func) {
 function toggleTab(tabName) {
 	var tabPages = mapFunc(qAll("a"), itm => ({ name: itm.innerText, tab: "#tab_" + itm.innerText }))
 	tabPages.forEach(obj => { 
-	     qOne(obj.tab).className = obj.name == tabName ? "w3-card w3-margin" : "w3-card w3-margin w3-hide"; 
+	     qOne(obj.tab).className = obj.name == tabName ? "w3-card w3-margin" : "w3-card w3-margin w3-hide"
 	})
 }
 
@@ -112,29 +898,29 @@ function toggleTab(tabName) {
 document.addEventListener("QHTMLContentLoaded", function() {
 
 //set the demo playground default code
-	qOne("#qhtmlEditor").value = `
+	const demoSource = `
 w3-bar, w3-black, w3-text-white, div {
     w3-bar-item, w3-left {
         span {
-            text: "Item1"
+            html { Item1 }
         }
         span {
-            text: "item 2"
+            html { item 2 }
         }
 
     }
 }
 w3-container, w3-large, w3-title {
     w3-header,w3-xlarge,w3-green,div {
-        text: "Hello world"
+        html { Hello world }
     }
 }
 w3-twothird,w3-article, w3-panel, w3-light-grey, blockquote {
       w3-justify,article {
             p { 
-                text: "Heres a great article about saying hello to the
+                html { Heres a great article about saying hello to the
                         world. only the way everybody else does it -- by
-                        saying hello world... only in latin... "
+                        saying hello world... only in latin...  }
               }
       }
 }
@@ -143,14 +929,14 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
                w3-bar {
                   w3-green {
                      w3-bar-item {
-                          li { text: "navigation" }
+                          li { html { navigation } }
                       }
                     }
                    w3-black,w3-center {
                       w3-bar-item {
-                         li { text: "item 1" }
-                         li { text: "item 2" }
-                         li { text: "item 3" }  
+                         li { html { item 1 } }
+                         li { html { item 2 } }
+                         li { html { item 3 } }  
                       }
                    }
                 }
@@ -161,19 +947,11 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 
 // end of demo playground code
 
-		
-	    updateQHTMLFromEditor()	// update the result div
-});
-
-/* playground editor update Results div */
-
-function updateQHTMLFromEditor() {
-	var qp = qOne("#qhtmlPreview");
-	qp.innerHTML = "";
-	qp.innerHTML = `<q-html>${qOne("#qhtmlEditor").value}</q-html>`;
-
-	
-}
+	const view = qOne("#qhtmlCodeView")
+	if (view && typeof view.setQhtmlSource === "function") {
+		view.setQhtmlSource(demoSource.trim())
+	}
+})
 
 
 
@@ -185,4 +963,3 @@ function updateQHTMLFromEditor() {
 </script>
 </body>
 </html>
-
