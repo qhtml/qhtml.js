@@ -702,34 +702,7 @@
 
  <q-html>
  div {
-        w3-card {
-            class: "w3-container"
-            h1 {
-                class: "w3-title"
-                html { "q-html homepage" }
-            }
-            w3-bar { 
-		w3-blue {
-		   div { class: "tabnav"
-			 a { class: "w3-bar-item w3-button" html { "Playground" } href: "#" onclick: "toggleTab('Playground')" }
-			 a { class: "w3-bar-item w3-button" html { "About" } href: "#" onclick: "toggleTab('Download')" }
-			 a { class: "w3-bar-item w3-button" html { "Download" } href: "#" onclick: "toggleTab('About')" }
-			}
-		}
-	}
-        div { 
-		id: "tab_About"
-		class: "w3-card w3-margin w3-hide"
-               	p {
-	              class: "w3-container"
-                      html { "This is the About page" }
-               	  }
-	          button {
-        	       class: "w3-btn w3-blue w3-margin"
-			html { "Click Me!" }
-			onclick: "openModal()"
-        	  }
-	  }
+     }
 	div { id: "tab_Playground" class: " w3-margin"
                	w3-container {
 	              class: "w3-container"
@@ -836,8 +809,8 @@
 			}
 		   }
 		}
-	   }
-        }
+	   
+        
 }
     </q-html>
 
