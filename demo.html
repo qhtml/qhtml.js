@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+v<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,6 +8,8 @@
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
 	<script src="https://qhtml.github.io/qhtml.js/bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->   
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
+    <script src="codemirror/codemirror.js" type="text/javascript"></script> <!-- codemirror v6 bundle -->
+    <link rel="stylesheet" href="codemirror/codemirror.css"> <!-- codemirror base styles -->
     <link rel="stylesheet" href="https://qhtml.github.io/qhtml.js/bs.css"> <!--  bs-tags.js dependency -->
 	<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
     <style>
@@ -73,6 +75,90 @@
         .tok-doctype { color: var(--hl-doctype); }
         .tok-entity  { color: var(--hl-entity); }
         .tok-text    { color: var(--hl-text); }
+
+        .qhtml-editor {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .qhtml-tabs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: #f8fafc;
+            padding: 6px;
+            flex-wrap: wrap;
+        }
+        .qhtml-tab {
+            appearance: none;
+            border: 0;
+            background: transparent;
+            padding: .5rem .75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 300;
+            color: #475569;
+        }
+        .qhtml-tab[aria-selected="true"] {
+            background: #fff;
+            box-shadow: 0 1px 0 #e5e7eb inset, 0 -1px 0 #fff inset;
+            color: #111827;
+        }
+        .qhtml-toggle {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            font-size: .75rem;
+            color: #334155;
+        }
+        .qhtml-toggle input { accent-color: #2563eb; }
+        .qhtml-panel { position: relative; display: none; }
+        .qhtml-panel[data-active="true"] { display: block; }
+
+        .qhtml-editor .cm-editor {
+            background: var(--hl-bg);
+            color: var(--hl-fg);
+            min-height: 12rem;
+        }
+        .qhtml-editor .cm-content {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            font-variant-ligatures: none;
+            tab-size: 4;
+        }
+        .qhtml-editor .cm-scroller { padding: 1rem; }
+        .qhtml-editor .cm-gutters {
+            background: var(--hl-bg);
+            color: #94a3b8;
+            border: none;
+        }
+        .qhtml-editor .cm-activeLineGutter { background: rgba(255,255,255,0.06); }
+        .qhtml-editor .cm-cursor,
+        .qhtml-editor .cm-dropCursor { border-left-color: var(--hl-fg); }
+        .qhtml-editor .cm-selectionBackground,
+        .qhtml-editor .cm-content ::selection { background: rgba(255,255,255,0.25); }
+
+        .cm-q-selector { color: var(--q-selector); }
+        .cm-q-class { color: var(--q-class); }
+        .cm-q-brace { color: var(--q-brace); }
+        .cm-q-colon { color: var(--q-colon); }
+        .cm-q-semi { color: var(--q-semi); }
+        .cm-q-prop { color: var(--q-prop); }
+        .cm-q-value { color: var(--q-value); }
+        .cm-q-string { color: var(--hl-string); }
+        .cm-q-number { color: var(--q-number); }
+        .cm-q-kw { color: var(--q-kw); }
+        .cm-q-comma { color: var(--q-comma); }
+        .cm-q-comment { color: var(--q-comment); font-style: italic; }
+        .cm-q-embedded { color: var(--q-embedded); }
+
+        #qhtmlPreview {
+            width: 100%;
+            min-height: 12rem;
+        }
     </style>
     <script>
         function escapeHTML(s){
@@ -375,6 +461,7 @@
             return out.join('\n');
         }
 
+        // ===== OLD CODE VIEW SYSTEM BEGIN (DO NOT MODIFY) =====
         class CodeView extends HTMLElement {
             constructor() {
                 super();
@@ -813,6 +900,351 @@
         }
 
         customElements.define('code-view', CodeView);
+        // ===== OLD CODE VIEW SYSTEM END (DO NOT MODIFY) =====
+
+        function buildQhtmlStreamLanguage(StreamLanguage) {
+            const vendorPrefixes = ['w3-','bs-','uk-','mdc-'];
+            return StreamLanguage.define({
+                startState() {
+                    return {
+                        depth: 0,
+                        inBlockComment: false,
+                        inHtml: false,
+                        htmlDepth: 0,
+                        wantHtml: false
+                    };
+                },
+                token(stream, state) {
+                    if (state.inBlockComment) {
+                        if (stream.skipTo('*/')) {
+                            stream.match('*/');
+                            state.inBlockComment = false;
+                        } else {
+                            stream.skipToEnd();
+                        }
+                        return 'comment';
+                    }
+
+                    if (state.inHtml) {
+                        if (stream.skipTo('}')) {
+                            const text = stream.current();
+                            if (text) return 'special';
+                        }
+                        if (stream.eat('}')) {
+                            state.depth = Math.max(0, state.depth - 1);
+                            if (state.depth < state.htmlDepth) {
+                                state.inHtml = false;
+                            }
+                            return 'bracket';
+                        }
+                        stream.skipToEnd();
+                        return 'special';
+                    }
+
+                    if (stream.eatSpace()) return null;
+
+                    if (stream.match('//')) {
+                        stream.skipToEnd();
+                        return 'comment';
+                    }
+                    if (stream.match('/*')) {
+                        state.inBlockComment = true;
+                        return 'comment';
+                    }
+
+                    if (stream.match(/"(?:[^\\"]|\\.)*"?/)) return 'string';
+                    if (stream.match(/'(?:[^\\']|\\.)*'?/)) return 'string';
+                    if (stream.match(/`(?:[^\\`]|\\.)*`?/)) return 'string';
+                    if (stream.match(/[0-9][0-9._]*/)) return 'number';
+
+                    if (stream.eat('{')) {
+                        state.depth += 1;
+                        if (state.wantHtml) {
+                            state.inHtml = true;
+                            state.htmlDepth = state.depth;
+                            state.wantHtml = false;
+                        }
+                        return 'bracket';
+                    }
+                    if (stream.eat('}')) {
+                        state.depth = Math.max(0, state.depth - 1);
+                        if (state.inHtml && state.depth < state.htmlDepth) {
+                            state.inHtml = false;
+                        }
+                        return 'bracket';
+                    }
+                    if (stream.eat(':')) return 'punctuation';
+                    if (stream.eat(';')) return 'punctuation';
+                    if (stream.eat(',')) return 'punctuation';
+
+                    if (stream.match(/[A-Za-z_][A-Za-z0-9_.-]*/)) {
+                        const word = stream.current();
+                        if (word === 'html') {
+                            state.wantHtml = true;
+                            return 'keyword';
+                        }
+                        if (word === 'component' || word === 'slot' || word === 'bsl') {
+                            return 'keyword';
+                        }
+                        if (vendorPrefixes.some((prefix) => word.startsWith(prefix))) {
+                            return 'className';
+                        }
+                        if (state.depth > 0) {
+                            const rest = stream.string.slice(stream.pos);
+                            if (/^\s*:/.test(rest)) {
+                                return 'propertyName';
+                            }
+                            if (/^\s*[{,]/.test(rest)) {
+                                return 'variableName';
+                            }
+                            return 'atom';
+                        }
+                        return 'variableName';
+                    }
+
+                    stream.next();
+                    return null;
+                }
+            });
+        }
+
+        function setCodeMirrorText(view, text) {
+            if (!view) return;
+            const current = view.state.doc.toString();
+            if (current === text) return;
+            view.dispatch({
+                changes: { from: 0, to: current.length, insert: text }
+            });
+        }
+
+        function renderHtmlFromQhtml(source, scratch) {
+            if (!source) return '';
+            const qhtml = source.trim().replace(/^\"|\"$/g, '');
+            const scratchEl = scratch || document.createElement('q-html');
+            if (typeof scratchEl.preprocess !== 'function' || typeof scratchEl.parseQHtml !== 'function') {
+                return source;
+            }
+            const pre = scratchEl.preprocess(qhtml);
+            const html = scratchEl.parseQHtml(pre);
+            const regex = /\"{1}([^\\\"]*)\"{1}/mg;
+            return html.replace(regex, (match, p1) => '\"' + decodeURIComponent(p1) + '\"');
+        }
+
+        function initCodeMirrorDemo(initialText, attempt) {
+            if (!window.CM) {
+                console.warn('CodeMirror bundle not loaded.');
+                return null;
+            }
+
+            const attemptCount = typeof attempt === 'number' ? attempt : 0;
+            const editorHost = document.getElementById('qhtmlEditor');
+            const htmlHost = document.getElementById('qhtmlHtmlView');
+            const toggle = document.getElementById('qhtmlRenderedToggle');
+            if (!editorHost || !htmlHost) {
+                if (attemptCount < 10) {
+                    const schedule = (window.requestAnimationFrame || function(cb){ setTimeout(cb, 50); });
+                    schedule(() => initCodeMirrorDemo(initialText, attemptCount + 1));
+                } else {
+                    console.warn('CodeMirror hosts not ready.');
+                }
+                return null;
+            }
+            if (editorHost.querySelector('.cm-editor') || htmlHost.querySelector('.cm-editor')) {
+                return null;
+            }
+
+            const cmState = window.CM['@codemirror/state'] || {};
+            const cmView = window.CM['@codemirror/view'] || {};
+            const cmLang = window.CM['@codemirror/language'] || {};
+            const cmCommands = window.CM['@codemirror/commands'] || {};
+            const cmCore = window.CM['codemirror'] || {};
+            const cmHtml = window.CM['@codemirror/lang-html'] || {};
+            const cmHighlight = window.CM['@lezer/highlight'] || {};
+
+            const { EditorState } = cmState;
+            const { EditorView, keymap, lineWrapping } = cmView;
+            const baseSetup = cmCore.basicSetup || cmCore.minimalSetup;
+            const { StreamLanguage, HighlightStyle, syntaxHighlighting } = cmLang;
+            const { indentWithTab } = cmCommands;
+            const { html } = cmHtml;
+            const { tags } = cmHighlight;
+
+            if (!EditorState || !EditorView) {
+                console.warn('CodeMirror core modules missing.');
+                return null;
+            }
+
+            const baseTheme = EditorView.theme ? EditorView.theme({
+                '&': { backgroundColor: 'var(--hl-bg)', color: 'var(--hl-fg)' },
+                '.cm-content': { caretColor: 'var(--hl-fg)' },
+                '.cm-scroller': { overflow: 'auto' }
+            }, { dark: true }) : null;
+
+            const htmlStyles = [];
+            if (tags && tags.tagName) htmlStyles.push({ tag: tags.tagName, color: 'var(--hl-tag)' });
+            if (tags && tags.attributeName) htmlStyles.push({ tag: tags.attributeName, color: 'var(--hl-attr)' });
+            if (tags && tags.string) htmlStyles.push({ tag: tags.string, color: 'var(--hl-string)' });
+            if (tags && tags.comment) htmlStyles.push({ tag: tags.comment, color: 'var(--hl-comment)', fontStyle: 'italic' });
+            if (tags && tags.documentMeta) htmlStyles.push({ tag: tags.documentMeta, color: 'var(--hl-doctype)' });
+            if (tags && tags.processingInstruction) htmlStyles.push({ tag: tags.processingInstruction, color: 'var(--hl-doctype)' });
+            if (tags && tags.punctuation) htmlStyles.push({ tag: tags.punctuation, color: 'var(--hl-angle)' });
+            if (tags && tags.character) htmlStyles.push({ tag: tags.character, color: 'var(--hl-entity)' });
+            const canHighlight = !!(HighlightStyle && syntaxHighlighting && tags);
+            const htmlHighlight = canHighlight && htmlStyles.length ? syntaxHighlighting(HighlightStyle.define(htmlStyles)) : null;
+
+            const qhtmlStyles = [];
+            if (tags && tags.variableName) qhtmlStyles.push({ tag: tags.variableName, color: 'var(--q-selector)' });
+            if (tags && tags.className) qhtmlStyles.push({ tag: tags.className, color: 'var(--q-class)' });
+            if (tags && tags.propertyName) qhtmlStyles.push({ tag: tags.propertyName, color: 'var(--q-prop)' });
+            if (tags && tags.keyword) qhtmlStyles.push({ tag: tags.keyword, color: 'var(--q-kw)' });
+            if (tags && tags.string) qhtmlStyles.push({ tag: tags.string, color: 'var(--hl-string)' });
+            if (tags && tags.number) qhtmlStyles.push({ tag: tags.number, color: 'var(--q-number)' });
+            if (tags && tags.comment) qhtmlStyles.push({ tag: tags.comment, color: 'var(--q-comment)', fontStyle: 'italic' });
+            if (tags && tags.atom) qhtmlStyles.push({ tag: tags.atom, color: 'var(--q-value)' });
+            if (tags && tags.bracket) qhtmlStyles.push({ tag: tags.bracket, color: 'var(--q-brace)' });
+            if (tags && tags.punctuation) qhtmlStyles.push({ tag: tags.punctuation, color: 'var(--q-colon)' });
+            if (tags && tags.special) qhtmlStyles.push({ tag: tags.special, color: 'var(--q-embedded)' });
+            const qhtmlHighlight = canHighlight && qhtmlStyles.length ? syntaxHighlighting(HighlightStyle.define(qhtmlStyles)) : null;
+
+            const qhtmlLanguage = StreamLanguage ? buildQhtmlStreamLanguage(StreamLanguage) : null;
+
+            const state = {
+                qhtmlView: null,
+                htmlView: null,
+                scratch: document.createElement('q-html'),
+                previewHost: null,
+                htmlRaw: '',
+                compiledHtml: '',
+                showRendered: false
+            };
+
+            const updateHtmlView = () => {
+                const text = state.showRendered ? state.compiledHtml : state.htmlRaw;
+                setCodeMirrorText(state.htmlView, text || '');
+            };
+
+            const updatePreview = (source) => {
+                const previewTarget = document.getElementById('qhtmlPreview');
+                if (!previewTarget) return;
+                if (!state.previewHost || !previewTarget.contains(state.previewHost)) {
+                    previewTarget.innerHTML = '';
+                    state.previewHost = document.createElement('q-html');
+                    previewTarget.appendChild(state.previewHost);
+                }
+                try {
+                    state.previewHost.innerHTML = source;
+                    if (typeof state.previewHost.render === 'function') {
+                        state.previewHost.render();
+                    }
+                } catch (err) {
+                    console.warn('Preview render failed:', err);
+                }
+                const schedule = (window.requestAnimationFrame || function(cb){ setTimeout(cb, 0); });
+                schedule(() => {
+                    if (!state.previewHost) return;
+                    state.compiledHtml = formatHTML(state.previewHost.innerHTML || '');
+                    updateHtmlView();
+                });
+            };
+
+            const updateOutputs = (source) => {
+                let htmlRaw = '';
+                try {
+                    htmlRaw = renderHtmlFromQhtml(source, state.scratch);
+                } catch (err) {
+                    console.warn('QHTML parse failed:', err);
+                }
+                state.htmlRaw = formatHTML(htmlRaw);
+                updatePreview(source);
+                updateHtmlView();
+            };
+
+            const baseExtensions = Array.isArray(baseSetup)
+                ? baseSetup.filter(Boolean)
+                : (baseSetup ? [baseSetup] : []);
+            const tabKeymap = keymap && indentWithTab ? keymap.of([indentWithTab]) : null;
+            const updateListener = EditorView.updateListener
+                ? EditorView.updateListener.of((update) => {
+                    if (update.docChanged) {
+                        updateOutputs(update.state.doc.toString());
+                    }
+                })
+                : null;
+
+            const qhtmlExtensions = []
+                .concat(baseExtensions, [
+                    lineWrapping,
+                    baseTheme,
+                    qhtmlLanguage,
+                    qhtmlHighlight,
+                    tabKeymap,
+                    updateListener
+                ])
+                .filter(Boolean);
+
+            const htmlLanguage = html ? html({ matchClosingTags: true }) : null;
+            const readOnly = EditorState.readOnly ? EditorState.readOnly.of(true) : null;
+            const nonEditable = EditorView.editable ? EditorView.editable.of(false) : null;
+            const htmlExtensions = []
+                .concat(baseExtensions, [
+                    lineWrapping,
+                    baseTheme,
+                    htmlLanguage,
+                    htmlHighlight,
+                    readOnly,
+                    nonEditable
+                ])
+                .filter(Boolean);
+
+            state.qhtmlView = new EditorView({
+                state: EditorState.create({
+                    doc: initialText || '',
+                    extensions: qhtmlExtensions
+                }),
+                parent: editorHost
+            });
+
+            state.htmlView = new EditorView({
+                state: EditorState.create({
+                    doc: '',
+                    extensions: htmlExtensions
+                }),
+                parent: htmlHost
+            });
+
+            const tabs = Array.from(document.querySelectorAll('.qhtml-tab'));
+            const panels = Array.from(document.querySelectorAll('.qhtml-panel'));
+            const setActiveTab = (name) => {
+                tabs.forEach((tab) => {
+                    const active = tab.getAttribute('data-tab') === name;
+                    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+                panels.forEach((panel) => {
+                    const active = panel.getAttribute('data-panel') === name;
+                    panel.setAttribute('data-active', active ? 'true' : 'false');
+                    panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+                });
+            };
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    setActiveTab(tab.getAttribute('data-tab'));
+                });
+            });
+
+            if (toggle) {
+                state.showRendered = !!toggle.checked;
+                toggle.addEventListener('change', () => {
+                    state.showRendered = !!toggle.checked;
+                    updateHtmlView();
+                });
+            }
+
+            setActiveTab('qhtml');
+            updateOutputs(initialText || '');
+
+            return state;
+        }
     </script>
 
 </head>
@@ -828,12 +1260,52 @@
                       html { "This is a playground for testing qhtml" }
                	  }
 		p { html { "Enter your qHTML Code below" } }
-		code-view {
-			id: "qhtmlCodeView"
-			class: "w3-card"
-			data-preview: "#qhtmlPreview";
-			code-view-tab { tab: "0" label: "QHTML" }
-			code-view-tab { tab: "1" label: "HTML" }
+		div {
+			id: "qhtmlEditorCard"
+			class: "qhtml-editor w3-card"
+			div {
+				class: "qhtml-tabs"
+				role: "tablist"
+				aria-label: "QHTML editor tabs"
+				button {
+					class: "qhtml-tab"
+					role: "tab"
+					aria-selected: "true"
+					data-tab: "qhtml"
+					html { "QHTML" }
+				}
+				button {
+					class: "qhtml-tab"
+					role: "tab"
+					aria-selected: "false"
+					data-tab: "html"
+					html { "HTML" }
+				}
+				label {
+					class: "qhtml-toggle"
+					input { id: "qhtmlRenderedToggle" type: "checkbox" }
+					span { html { "Fully Rendered HTML" } }
+				}
+			}
+			div {
+				class: "qhtml-panels"
+				div {
+					class: "qhtml-panel"
+					data-panel: "qhtml"
+					data-active: "true"
+					role: "tabpanel"
+					aria-hidden: "false"
+					div { id: "qhtmlEditor" }
+				}
+				div {
+					class: "qhtml-panel qhtml-html-view"
+					data-panel: "html"
+					data-active: "false"
+					role: "tabpanel"
+					aria-hidden: "true"
+					div { id: "qhtmlHtmlView" }
+				}
+			}
 		}
 		br { }
 
@@ -1034,10 +1506,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 
 // end of demo playground code
 
-	const view = qOne("#qhtmlCodeView")
-	if (view && typeof view.setQhtmlSource === "function") {
-		view.setQhtmlSource(demoSource.trim())
-	}
+	initCodeMirrorDemo(demoSource.trim())
 })
 
 
@@ -1050,15 +1519,3 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
