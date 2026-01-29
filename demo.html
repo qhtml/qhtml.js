@@ -708,14 +708,21 @@
                     offset += node.nodeType === Node.TEXT_NODE ? node.nodeValue.length : 1;
                 }
                 if (range.startContainer.nodeType === Node.ELEMENT_NODE) {
-                    const parent = range.startContainer;
-                    for (let i = 0; i < range.startOffset; i++) {
-                        offset += subtreeLength(parent.childNodes[i]);
-                    }
-                    return offset;
-                }
-                return offset;
-            }
+    const parent = range.startContainer;
+    for (let i = 0; i < range.startOffset; i++) {
+        const n = parent.childNodes[i];
+        if (!n) continue;
+
+        if (n.nodeType === Node.TEXT_NODE) {
+            offset += n.nodeValue.length;
+        } else if (n.nodeType === Node.ELEMENT_NODE && n.tagName === 'BR') {
+            offset += 1;
+        } else {
+            offset += subtreeLength(n);
+        }
+    }
+    return offset;
+}
 
             _setCaretOffset(container, offset) {
                 const sel = window.getSelection();
@@ -1036,6 +1043,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
