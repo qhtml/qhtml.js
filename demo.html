@@ -448,20 +448,25 @@
 
             _bind() {
                 if (this._qhtmlEditor) {
-                    this._qhtmlEditor.addEventListener('input', () => {
-                        if (this._isRendering) return;
-                        var caret = this._getCaretOffset(this._qhtmlEditor);
-						 if (this._pendingCaretDelta) {
-     					   caret += this._pendingCaretDelta;
-        				   this._pendingCaretDelta = 0;
- 	   			        }
-                        this._qhtmlSource = this._readEditorText();
-                        if (this._qhtmlSourceArea) {
-                            this._qhtmlSourceArea.value = this._qhtmlSource;
-                        }
-                        this._renderEditor(this._qhtmlSource, caret);
-                        this._updateOutputs();
-                    });
+                this._qhtmlEditor.addEventListener('input', () => {
+    if (this._isRendering) return;
+
+    let caret = this._getCaretOffset(this._qhtmlEditor);
+
+    if (this._pendingCaretDelta) {
+        caret += this._pendingCaretDelta;
+        this._pendingCaretDelta = 0;
+    }
+
+    this._qhtmlSource = this._readEditorText();
+    if (this._qhtmlSourceArea) {
+        this._qhtmlSourceArea.value = this._qhtmlSource;
+    }
+
+    this._renderEditor(this._qhtmlSource, caret);
+    this._updateOutputs();
+});
+
                     this._qhtmlEditor.addEventListener('keydown', (event) => {
                         if (event.key === 'Tab') {
                             event.preventDefault();
@@ -1031,6 +1036,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
