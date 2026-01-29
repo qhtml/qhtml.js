@@ -1,9 +1,7 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v3.99
- * - added text { } helper for inline text only
- * - fixed html { } so now both work as expected
- * - removed text: and content: properties but they still work for backwards compatability. 
+ * v4.0
+ * - added onEvent { } helpers that support full spec javascript to simplify event handling.
  * - added style { } tags to support styling  without the need for using a style:  attribute .
  * div { 
  *   style { background-color: #00FF33; }
@@ -12,13 +10,7 @@
  * - also fixed qcomponent bug where slots did not render completely.
  * - Now can inject text { } and html { } elements as direct children of slots
  *
- * This file has been refactored to break down large procedural blocks
- * into discrete helper functions.  These helpers are defined at the
- * top-level of the module and encapsulate specific bits of logic
- * originally nested within methods.  The QHtmlElement class now
- * delegates to these helpers for preprocessing, component expansion
- * and qhtml parsing, improving readability and maintainability.
- */
+*/
 
 // -----------------------------------------------------------------------------
 // Top-level helper functions
@@ -610,6 +602,67 @@ function transformComponentDefinitionsHelper(input) {
     return out;
 }
 
+function sanitizeInlineHandler(scriptBody) {
+    let out = '';
+    let inSingle = false;
+    let inDouble = false;
+    let inBacktick = false;
+    let escaped = false;
+    let lastWasSpace = false;
+
+    for (let i = 0; i < scriptBody.length; i++) {
+        const ch = scriptBody[i];
+
+        if (escaped) {
+            out += ch;
+            escaped = false;
+            lastWasSpace = false;
+            continue;
+        }
+
+        if (ch === '\\' && (inSingle || inDouble || inBacktick)) {
+            out += ch;
+            escaped = true;
+            lastWasSpace = false;
+            continue;
+        }
+
+        if (ch === '"' && !inSingle && !inBacktick) {
+            inDouble = !inDouble;
+            out += '\'';
+            lastWasSpace = false;
+            continue;
+        }
+
+        if (ch === '\'' && !inDouble && !inBacktick) {
+            inSingle = !inSingle;
+            out += '\'';
+            lastWasSpace = false;
+            continue;
+        }
+
+        if (ch === '`' && !inSingle && !inDouble) {
+            inBacktick = !inBacktick;
+            out += ch;
+            lastWasSpace = false;
+            continue;
+        }
+
+        if (!inSingle && !inDouble && !inBacktick && /\s/.test(ch)) {
+            if (!lastWasSpace) {
+                out += ' ';
+                lastWasSpace = true;
+            }
+            continue;
+        }
+
+        out += ch;
+        lastWasSpace = false;
+    }
+
+    return out.trim();
+}
+
 /**
  * Extract a flat list of property and child element segments from a qhtml
  * invocation. Produces segments of type: 'property' | 'element' | 'html' | 'css'.
@@ -625,6 +678,7 @@ function extractPropertiesAndChildren(input) {
   let nestedLevel = 0;
   let segmentStart = 0;
   let currentSegment = null; // {type, tag, content, _buf?, _cssDepth?}
+  const isEventBlock = (tag) => /^on[A-Za-z0-9_]+$/.test(tag);
 
   // Per-segment helpers
   const beginHtml = (tag) => {
@@ -670,6 +724,19 @@ function extractPropertiesAndChildren(input) {
     // For symmetry with html/css we URI-encode; will decode at render time.
     currentSegment.content = encodeURIComponent(currentSegment._buf.join(''));
     segments.push(currentSegment);
+    currentSegment = null;
+  };
+
+  const beginEventBlock = (name) => {
+    currentSegment = { type: 'event-block', name, _buf: [], _depth: 1 };
+  };
+  const appendEventBlock = (ch) => currentSegment && currentSegment._buf.push(ch);
+  const incEventDepth = () => { if (currentSegment) currentSegment._depth++; };
+  const decEventDepth = () => { if (currentSegment) currentSegment._depth--; };
+  const endEventBlock = () => {
+    const raw = currentSegment._buf.join('');
+    const cleaned = sanitizeInlineHandler(raw);
+    segments.push({ type: 'property', name: currentSegment.name, value: cleaned });
     currentSegment = null;
   };
 
@@ -753,6 +820,30 @@ function extractPropertiesAndChildren(input) {
       continue;
     }
 
+    // Inside event handler block (track nested braces)
+    if (currentSegment && currentSegment.type === 'event-block') {
+      const ch = input[i];
+      if (ch === '{') {
+        incEventDepth();
+        appendEventBlock(ch);
+        continue;
+      }
+      if (ch === '}') {
+        decEventDepth();
+        if (currentSegment._depth === 0) {
+          endEventBlock();
+          nestedLevel--;
+          const rest = input.substring(i + 1);
+          return segments.concat(extractPropertiesAndChildren(rest));
+        } else {
+          appendEventBlock(ch);
+        }
+        continue;
+      }
+      appendEventBlock(ch);
+      continue;
+    }
+
     // Top-level parser at this nesting level
     const ch = input[i];
 
@@ -763,6 +854,7 @@ function extractPropertiesAndChildren(input) {
         segmentStart = i + 1;
         const tag = input.substring(0, i).trim();
 
+        if (isEventBlock(tag)) { beginEventBlock(tag); continue; }
         if (tag === 'html') { beginHtml(tag); continue; }
         if (tag === 'css')  { beginCss(tag); continue; }
         if (tag === 'text') { beginText(tag); continue; }
@@ -1876,4 +1968,3 @@ window.addEventListener("QHTMLContentLoaded", function() {
     var qhtmlEvent = new CustomEvent('QHTMLPostProcessComplete', {});
     document.dispatchEvent(qhtmlEvent);
 });
-
