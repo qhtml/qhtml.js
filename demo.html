@@ -451,6 +451,10 @@
                     this._qhtmlEditor.addEventListener('input', () => {
                         if (this._isRendering) return;
                         const caret = this._getCaretOffset(this._qhtmlEditor);
+						 if (this._pendingCaretDelta) {
+     					   caret += this._pendingCaretDelta;
+        				   this._pendingCaretDelta = 0;
+ 	   			        }
                         this._qhtmlSource = this._readEditorText();
                         if (this._qhtmlSourceArea) {
                             this._qhtmlSourceArea.value = this._qhtmlSource;
@@ -466,6 +470,7 @@
                         }
                         if (event.key === 'Enter') {
                             event.preventDefault();
+							 this._pendingCaretDelta = 1;   // ← ADD THIS
                             document.execCommand('insertLineBreak');
                         }
                     });
@@ -1026,5 +1031,6 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
