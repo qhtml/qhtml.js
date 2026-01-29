@@ -464,7 +464,7 @@
                         }
                         if (event.key === 'Enter') {
                             event.preventDefault();
-                            document.execCommand('insertText', false, '\n');
+                            document.execCommand('insertLineBreak');
                         }
                     });
                     this._qhtmlEditor.addEventListener('paste', (event) => {
@@ -546,7 +546,7 @@
                         '.cv-copy { position:absolute; top:.5rem; right:.5rem; font-size:.675rem; background:#111827; color:#fff; border:0; border-radius:8px; padding:.35rem .6rem; cursor:pointer; z-index:3; }' +
                         '.cv-panel { position:relative; }' +
                         '.cv-edit-wrap { position:relative; }' +
-                        '.cv-editor { background: var(--hl-bg); color: var(--hl-fg); padding:1rem; border-radius:12px; min-height:10rem; overflow:auto; font:inherit; line-height:1.5; white-space:pre; font-variant-ligatures:none; tab-size:4; outline:none; }' +
+                        '.cv-editor { background: var(--hl-bg); color: var(--hl-fg); padding:1rem; border-radius:12px; min-height:10rem; overflow:auto; font:inherit; line-height:1.5; white-space:pre-wrap; font-variant-ligatures:none; tab-size:4; outline:none; }' +
                         '.cv-editor::selection, .cv-editor span::selection { background: rgba(255,255,255,0.25); }' +
                         '.cv-source { position:absolute; inset:0; opacity:0; pointer-events:none; height:1px; width:1px; }' +
                         '.cv-panel pre { margin:0; min-height:10rem; }' +
@@ -1024,3 +1024,4 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
