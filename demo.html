@@ -685,7 +685,7 @@
                 if (!container.contains(range.startContainer)) return 0;
                 const subtreeLength = (node) => {
                     if (!node) return 0;
-                    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue.length;
+                      return node.nodeValue === '\u200B' ? 0 : node.nodeValue.length;
                     if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return 1;
                     let total = 0;
                     node.childNodes.forEach(child => { total += subtreeLength(child); });
@@ -1050,6 +1050,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
