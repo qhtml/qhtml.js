@@ -231,7 +231,7 @@ q-script:
 
  Results: 
 
-          <div>hello world<span><br> hello again </span></div>
+          <div>hello world<br> hello again </div>
 	
 
 
@@ -267,6 +267,7 @@ Use the style tag inside of a block to apply the stylesheet directly to that blo
 For more detailed documentation, examples, and tools, visit 
    <a href="https://www.datafault.net">https://www.datafault.net</a>
 </h2>
+
 
 
 
