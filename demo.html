@@ -631,11 +631,13 @@
                     }
                     const cls = token.type ? 'tok-' + token.type : 'tok-text';
                     for (const ch of value) {
-                        if (ch === '\n') {
-                            out += '<br data-idx="' + idx + '" id="cvch-' + this._editorId + '-' + idx + '">';
-                            idx++;
-                            continue;
-                        }
+                     if (ch === '\n') {
+    out += '<br data-idx="' + idx + '">';
+    out += '<span class="cv-eol" data-idx="' + (idx + 1) + '">&#8203;</span>';
+    idx += 2;
+    continue;
+}
+
                         out += '<span id="cvch-' + this._editorId + '-' + idx + '" data-idx="' + idx + '" class="' + cls + '">' + escapeHTML(ch) + '</span>';
                         idx++;
                     }
@@ -1044,6 +1046,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
