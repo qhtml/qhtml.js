@@ -658,6 +658,7 @@
                         acceptNode(node) {
                             if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
                             if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
+							
                             return NodeFilter.FILTER_SKIP;
                         }
                     }
@@ -665,7 +666,10 @@
                 let out = '';
                 let node;
                 while ((node = walker.nextNode())) {
+					
                     if (node.nodeType === Node.TEXT_NODE) {
+						    if (node.nodeValue === '\u200B') continue;
+
                         out += node.nodeValue;
                     } else if (node.tagName === 'BR') {
                         out += '\n';
@@ -1046,6 +1050,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
