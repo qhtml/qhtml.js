@@ -6,8 +6,8 @@
     <title>QHTML Demo</title> 
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
-	    <script src="bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
-	    <script src="bs.css" type="text/javascript"></script> <!-- optional w3-tags addon -->
+	    <script src="https://www.datafault.net/bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
+	    <script src="https://www.datafault.net/bs.css" type="text/javascript"></script> <!-- optional w3-tags addon -->
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
 <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
     <style>
@@ -450,7 +450,7 @@
                 if (this._qhtmlEditor) {
                     this._qhtmlEditor.addEventListener('input', () => {
                         if (this._isRendering) return;
-                        const caret = this._getCaretOffset(this._qhtmlEditor);
+                        var caret = this._getCaretOffset(this._qhtmlEditor);
 						 if (this._pendingCaretDelta) {
      					   caret += this._pendingCaretDelta;
         				   this._pendingCaretDelta = 0;
@@ -1031,6 +1031,7 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
+
 
 
 
