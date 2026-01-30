@@ -1,17 +1,26 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v4.0
- * - added onEvent { } helpers that support full spec javascript to simplify event handling.
- * - added style { } tags to support styling  without the need for using a style:  attribute .
- * div { 
- *   style { background-color: #00FF33; }
- * }
- * 
- * - also fixed qcomponent bug where slots did not render completely.
- * - Now can inject text { } and html { } elements as direct children of slots
- *
+ * v4.1
+ * - added into keyword for injection of arbitrary qhtml into the slot(s) in q-component(s) 
+   q-component { 
+        id: "my-component
+        div { 
+         slot { name: "myslot" }
+       } 
+  }
+  my-component { 
+     into { 
+        slot: "myslot"
+        br { }
+        html { arbitrary html or other <b>tags</b> }     
+     }  
+  }
+ * ------------------
+ *   Result
+   <div><br />arbitrary html or other <b>tags</b></div>
+*--------------------------
+* Replaced the editor in demo.html with a codemirror editor that has customized syntax hilighting and is much more efficient / smooth / bug free
 */
-
 // -----------------------------------------------------------------------------
 // Top-level helper functions
 //
@@ -304,7 +313,7 @@ function findTagInvocation(str, id, fromIndex) {
  * assignment.  Nested blocks within segments are not considered.
  *
  * @param {string} body The content inside a component invocation
- * @returns {Array<{tag: string, block: string}>} An array of child element descriptors
+ * @returns {Array<{tag: string, block: string, start: number}>} An array of child element descriptors
  */
 function splitTopLevelSegments(body) {
     const segs = [];
@@ -321,7 +330,7 @@ function splitTopLevelSegments(body) {
             const close = findMatchingBrace(body, open);
             if (close === -1) break;
             const block = `${token} ${body.slice(open, close + 1)}`;
-            segs.push({ tag: token, block });
+            segs.push({ tag: token, block, start: i });
             i = close + 1;
         } else {
             const semi = body.indexOf(';', j);
@@ -349,6 +358,192 @@ function removeNestedBlocks(str) {
         if (depth === 0) out += ch;
     }
     return out;
+}
+
+/**
+ * Collect ranges of component invocations so nested structures can be
+ * excluded from into resolution.
+ *
+ * @param {string} input The qhtml string to scan
+ * @param {string[]} componentIds Known component tags
+ * @returns {Array<{start: number, end: number}>} Invocation ranges
+ */
+function collectComponentInvocationRanges(input, componentIds) {
+    const ranges = [];
+    componentIds.forEach((id) => {
+        let pos = 0;
+        while (true) {
+            const found = findTagInvocation(input, id, pos);
+            if (!found) break;
+            ranges.push({ start: found.braceOpen, end: found.braceClose });
+            pos = found.braceClose + 1;
+        }
+    });
+    return ranges;
+}
+
+function isIndexInsideRanges(index, ranges) {
+    for (const range of ranges) {
+        if (index >= range.start && index <= range.end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Collect slot definitions within a component template, tracking which slots
+ * live directly on the component versus inside sub-component invocations.
+ *
+ * @param {string} template Component template text
+ * @param {string[]} componentIds Known component tags
+ * @returns {{directSlots: Map<string, number>, subcomponentSlots: Map<string, number>, slotNames: Set<string>}}
+ */
+function collectTemplateSlotDefinitions(template, componentIds) {
+    const directSlots = new Map();
+    const subcomponentSlots = new Map();
+    const slotNames = new Set();
+    const subcomponentRanges = collectComponentInvocationRanges(template, componentIds);
+
+    let pos = 0;
+    while (true) {
+        const idx = template.indexOf('slot', pos);
+        if (idx === -1) break;
+        let cursor = idx + 4;
+        while (cursor < template.length && /\s/.test(template[cursor])) cursor++;
+        if (template[cursor] !== '{') {
+            pos = cursor;
+            continue;
+        }
+        const open = cursor;
+        const close = findMatchingBrace(template, open);
+        if (close === -1) break;
+        const inner = template.slice(open + 1, close);
+        const flattened = removeNestedBlocks(inner);
+        const match = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
+        if (match) {
+            const slotName = match[1];
+            slotNames.add(slotName);
+            const target = isIndexInsideRanges(idx, subcomponentRanges) ? subcomponentSlots : directSlots;
+            target.set(slotName, (target.get(slotName) || 0) + 1);
+        }
+        pos = close + 1;
+    }
+    return { directSlots, subcomponentSlots, slotNames };
+}
+
+/**
+ * Parse an into block into an IntoNode-like descriptor for projection.
+ *
+ * @param {string} block The full into { ... } block
+ * @param {string} componentId Component context for logging
+ * @returns {{targetSlot: string, children: string, position: number}|null}
+ */
+function parseIntoBlock(block, componentId, position) {
+    const brace = block.indexOf('{');
+    if (brace === -1) {
+        componentLogger.error(componentId, 'Into block is missing an opening brace.');
+        return null;
+    }
+    const close = findMatchingBrace(block, brace);
+    if (close === -1) {
+        componentLogger.error(componentId, 'Into block is missing a closing brace.');
+        return null;
+    }
+    const inner = block.slice(brace + 1, close);
+    const flattened = removeNestedBlocks(inner);
+    const re = /([a-zA-Z_][\w\-.]*)\s*:\s*"([^"]+)"\s*;?/g;
+    const props = [];
+    let match;
+    while ((match = re.exec(flattened))) {
+        props.push({ property: match[1], value: match[2] });
+    }
+    const illegalTargets = props.filter((prop) => prop.property.endsWith('.slot'));
+    if (illegalTargets.length) {
+        componentLogger.error(componentId, `Into block attempted to inject into non-slot target "${illegalTargets[0].property}".`);
+        return null;
+    }
+    const slotProps = props.filter((prop) => prop.property === 'slot');
+    if (!slotProps.length) {
+        componentLogger.error(componentId, 'Into block is missing required slot attribute.');
+        return null;
+    }
+    if (slotProps.length > 1) {
+        componentLogger.error(componentId, 'Into block has multiple slot targets; slot must be unique.');
+        return null;
+    }
+    const slotName = slotProps[0].value.trim();
+    if (!slotName) {
+        componentLogger.error(componentId, 'Into block slot attribute is empty.');
+        return null;
+    }
+    if (slotName.includes('.')) {
+        componentLogger.error(componentId, `Into block attempted to inject into non-slot target "${slotName}".`);
+        return null;
+    }
+
+    // IntoNode shape: { targetSlot, children }
+    const cleaned = stripTopLevelProps(inner, ['slot']).trim();
+    return { targetSlot: slotName, children: cleaned, position };
+}
+
+/**
+ * Collect into blocks that apply to the current component instance. Into
+ * blocks nested inside other component invocations are ignored so resolution
+ * follows the nearest enclosing component instance.
+ *
+ * @param {string} body Invocation body to scan
+ * @param {string[]} componentIds Known component tags
+ * @param {string} componentId Component context for logging
+ * @returns {Array<{targetSlot: string, children: string, position: number}>}
+ */
+function collectIntoNodes(body, componentIds, componentId) {
+    const nodes = [];
+    const componentRanges = collectComponentInvocationRanges(body, componentIds);
+    let pos = 0;
+    while (true) {
+        const found = findTagInvocation(body, 'into', pos);
+        if (!found) break;
+        if (!isIndexInsideRanges(found.tagStart, componentRanges)) {
+            const block = body.slice(found.tagStart, found.braceClose + 1);
+            const node = parseIntoBlock(block, componentId, found.tagStart);
+            if (node) nodes.push(node);
+        }
+        pos = found.braceClose + 1;
+    }
+    return nodes;
+}
+
+/**
+ * Resolve an into target against a component's slot definitions. Resolution
+ * prefers direct slots on the component, then slots declared inside
+ * sub-component invocations.
+ *
+ * @param {string} slotName The slot requested by into
+ * @param {{directSlots: Map<string, number>, subcomponentSlots: Map<string, number>}} slotInfo
+ * @param {string} componentId Component context for logging
+ * @returns {string|null} The resolved slot name or null on error
+ */
+function resolveIntoSlotTarget(slotName, slotInfo, componentId) {
+    const directCount = slotInfo.directSlots.get(slotName) || 0;
+    const nestedCount = slotInfo.subcomponentSlots.get(slotName) || 0;
+
+    if (directCount > 1) {
+        componentLogger.error(componentId, `Into target slot "${slotName}" is ambiguous; multiple direct slot matches found.`);
+        return null;
+    }
+    if (directCount === 1) {
+        return slotName;
+    }
+    if (nestedCount > 1) {
+        componentLogger.error(componentId, `Into target slot "${slotName}" is ambiguous; multiple sub-component slot matches found.`);
+        return null;
+    }
+    if (nestedCount === 1) {
+        return slotName;
+    }
+    componentLogger.error(componentId, `Into target slot "${slotName}" was not found.`);
+    return null;
 }
 
 /**
@@ -536,14 +731,19 @@ function transformComponentDefinitionsHelper(input) {
         if (idMatch) {
             const id = idMatch[1];
             const template = stripTopLevelProps(inner, ['id', 'slots']).trim();
-            const slotNames = collectTemplateSlotNames(template);
-            defs.push({ id, template, slotNames });
+            defs.push({ id, template });
             out = out.slice(0, start) + out.slice(close + 1);
             idx = Math.max(0, start - 1);
         } else {
             idx = close + 1;
         }
     }
+    const componentIds = defs.map((def) => def.id);
+    const slotRegistry = new Map();
+    for (const def of defs) {
+        slotRegistry.set(def.id, collectTemplateSlotDefinitions(def.template, componentIds));
+    }
+
     const maxPasses = Math.max(1, defs.length * 3);
     let pass = 0;
     let changed = true;
@@ -551,7 +751,12 @@ function transformComponentDefinitionsHelper(input) {
     while (changed && pass < maxPasses) {
         changed = false;
         pass++;
-        for (const { id, template, slotNames } of defs) {
+        for (const { id, template } of defs) {
+            const slotInfo = slotRegistry.get(id) || {
+                directSlots: new Map(),
+                subcomponentSlots: new Map(),
+                slotNames: new Set()
+            };
             let pos = 0;
             while (true) {
                 const k = findTagInvocation(out, id, pos);
@@ -560,7 +765,22 @@ function transformComponentDefinitionsHelper(input) {
                 const body = out.slice(braceOpen + 1, braceClose);
                 const children = splitTopLevelSegments(body);
                 const slotMap = new Map();
+                const slotEntries = [];
+
+                const intoNodes = collectIntoNodes(body, componentIds, id);
+                for (const node of intoNodes) {
+                    const resolved = resolveIntoSlotTarget(node.targetSlot, slotInfo, id);
+                    if (!resolved) continue;
+                    slotEntries.push({
+                        slotName: resolved,
+                        content: node.children,
+                        position: node.position
+                    });
+                }
                 for (const seg of children) {
+                    if (seg.tag === 'into') {
+                        continue;
+                    }
                     const directives = extractTopLevelSlotDirectives(seg.block);
                     if (!directives.length) continue;
                     let handled = false;
@@ -569,14 +789,17 @@ function transformComponentDefinitionsHelper(input) {
                         if (target !== id || !slotName) {
                             continue;
                         }
-                        if (slotNames.size && !slotNames.has(slotName)) {
+                        if (slotInfo.slotNames.size && !slotInfo.slotNames.has(slotName)) {
                             componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
                             handled = true;
                             break;
                         }
                         const cleanedBlock = removeSlotDirectivesFromBlock(seg.block, [directive]).trim();
-                        const existing = slotMap.get(slotName) || '';
-                        slotMap.set(slotName, existing + '\n' + cleanedBlock);
+                        slotEntries.push({
+                            slotName,
+                            content: cleanedBlock,
+                            position: typeof seg.start === 'number' ? seg.start : 0
+                        });
                         handled = true;
                         break;
                     }
@@ -588,6 +811,12 @@ function transformComponentDefinitionsHelper(input) {
                         }
                     }
                 }
+                slotEntries.sort((a, b) => a.position - b.position);
+                for (const entry of slotEntries) {
+                    const existing = slotMap.get(entry.slotName) || '';
+                    slotMap.set(entry.slotName, existing + '\n' + entry.content);
+                }
+
                 const expanded = replaceTemplateSlots(template, slotMap, { componentId: id });
                 out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
                 pos = tagStart + expanded.length;
