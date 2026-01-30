@@ -240,6 +240,86 @@ HTML:
 </div>
 ```
 
+## Into blocks (slot projection)
+
+The `into {}` block lets you project content into a named slot without attaching
+`slot: "name"` to every child. It is a structural block (not an attribute), and
+`slot` is required. `into` targets only `slot { name: "..." }` placeholders and
+never injects directly into components.
+
+### Single-slot injection
+
+QHTML:
+
+```qhtml
+q-component {
+  id: "label-pill"
+  span {
+    class: "pill"
+    slot { name: "label" }
+  }
+}
+
+label-pill {
+  into {
+    slot: "label"
+    text { New }
+  }
+}
+```
+
+HTML:
+
+```html
+<span class="pill">New</span>
+```
+
+### Nested projection through another component
+
+This example wraps content across two components by targeting a single slot.
+
+QHTML:
+
+```qhtml
+q-component {
+  id: "outer-frame"
+  div {
+    class: "outer"
+    inner-box {
+      into {
+        slot: "inner"
+        slot { name: "content" }
+      }
+    }
+  }
+}
+
+q-component {
+  id: "inner-box"
+  div {
+    class: "inner"
+    slot { name: "inner" }
+  }
+}
+
+outer-frame {
+  into {
+    slot: "content"
+    p { text { Wrapped twice } }
+  }
+}
+```
+
+HTML:
+
+```html
+<div class="outer">
+  <div class="inner">
+    <p>Wrapped twice</p>
+  </div>
+</div>
+```
+
 ## w3-tags.js (W3CSS shorthand)
 
 `w3-tags.js` lets you write W3CSS classes as tags. It transforms nested `w3-*` elements into real HTML with the right classes.
