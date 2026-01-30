@@ -288,7 +288,7 @@ q-component {
     inner-box {
       into {
         slot: "inner"
-        slot { name: "content" }
+        slot { name: "content" }   /* this slot is registered to the outer-frame q-component */
       }
     }
   }
@@ -397,3 +397,4 @@ HTML (result):
 
 Open `demo.html` to see a full playground with QHTML, HTML, and live preview side by side.
 Also check out <a href="https://datafault.net/">datafault.net</a> for more information and examples on using qhtml.js.
+
