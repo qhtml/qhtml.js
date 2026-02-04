@@ -27476,7 +27476,7 @@
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
-      closeBrackets(),
+     /*  closeBrackets(), */
       autocompletion(),
       rectangularSelection(),
       crosshairCursor(),
