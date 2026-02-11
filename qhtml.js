@@ -1,25 +1,47 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v4.1
- * - added into keyword for injection of arbitrary qhtml into the slot(s) in q-component(s) 
-   q-component { 
-        id: "my-component
-        div { 
-         slot { name: "myslot" }
-       } 
-  }
-  my-component { 
-     into { 
-        slot: "myslot"
-        br { }
-        html { arbitrary html or other <b>tags</b> }     
-     }  
-  }
- * ------------------
- *   Result
-   <div><br />arbitrary html or other <b>tags</b></div>
-*--------------------------
-* Replaced the editor in demo.html with a codemirror editor that has customized syntax hilighting and is much more efficient / smooth / bug free
+ * v4.2
+ * Added some shortcuts for parts of the language that were a bit redunant
+ 
+ Now Can use the following:
+ 
+	 q-component card-panel {
+	    div { ... }
+	    
+	 }  
+instead of using the the original syntax:
+
+     q-component { 
+        id: "card-panel" 
+        div { ... }
+     }
+     
+ Both are still accepted. 
+ 
+ Also added are slot shortcuts by using slot id/names or just specifying the slot name as a child tag
+ 
+	 q-component my-component {
+	  slot { id: "my-slot1" }
+	  slot { name: "my-slot2" }
+	  slot { my-slot3 }
+	}
+	
+All are valid.
+
+Injecting into a slot is now this simple:
+ 
+	my-component {
+	  my-slot {
+	    text { hello world }
+	  }
+	}
+
+---
+Also addimg classes to tags is now easier
+
+	div.someclass.anotherclass,span.thirdclass {
+	  text { hello world }
+	}
 */
 // -----------------------------------------------------------------------------
 // Top-level helper functions
@@ -57,6 +79,29 @@ const componentLogger = {
         logComponentIssue('info', componentId, message);
     }
 };
+
+function parseTagWithClasses(tag) {
+    const trimmed = (tag || '').trim();
+    if (!trimmed) return { base: '', classes: [] };
+    const parts = trimmed.split('.').filter(Boolean);
+    const base = parts.shift() || '';
+    return { base, classes: parts };
+}
+
+function mergeClassNames(existing, incoming) {
+    const existingList = (existing || '').split(/\s+/).filter(Boolean);
+    const incomingList = (incoming || '').split(/\s+/).filter(Boolean);
+    const merged = new Set();
+    existingList.forEach((cls) => merged.add(cls));
+    incomingList.forEach((cls) => merged.add(cls));
+    return Array.from(merged).join(' ');
+}
+
+function mergeClassAttribute(element, classValue) {
+    if (!element || !classValue) return;
+    const merged = mergeClassNames(element.getAttribute('class'), classValue);
+    if (merged) element.setAttribute('class', merged);
+}
 
 /**
  * Add a trailing semicolon to property definitions missing one.  Properties
@@ -295,8 +340,12 @@ function escapeReg(s) {
  * @returns {object|null} An object containing the indices of the tag start,
  *                        opening brace and closing brace
  */
-function findTagInvocation(str, id, fromIndex) {
-    const re = new RegExp(`(^|[^\\w-])(${escapeReg(id)})\\s*\\{`, 'g');
+function findTagInvocation(str, id, fromIndex, options = {}) {
+    const { allowClasses = false } = options;
+    const pattern = allowClasses
+        ? `(^|[^\\w-])(${escapeReg(id)}(?:\\.[A-Za-z0-9_-]+)*)\\s*\\{`
+        : `(^|[^\\w-])(${escapeReg(id)})\\s*\\{`;
+    const re = new RegExp(pattern, 'g');
     re.lastIndex = fromIndex || 0;
     const m = re.exec(str);
     if (!m) return null;
@@ -304,7 +353,7 @@ function findTagInvocation(str, id, fromIndex) {
     const tagStart = m.index + (m[1] ? 1 : 0);
     const braceClose = findMatchingBrace(str, braceOpen);
     if (braceClose === -1) return null;
-    return { tagStart, braceOpen, braceClose };
+    return { tagStart, braceOpen, braceClose, tagToken: m[2] };
 }
 
 /**
@@ -330,7 +379,7 @@ function splitTopLevelSegments(body) {
             const close = findMatchingBrace(body, open);
             if (close === -1) break;
             const block = `${token} ${body.slice(open, close + 1)}`;
-            segs.push({ tag: token, block, start: i });
+            segs.push({ tag: token, block, start: i, braceOpen: open, braceClose: close });
             i = close + 1;
         } else {
             const semi = body.indexOf(';', j);
@@ -360,6 +409,115 @@ function removeNestedBlocks(str) {
     return out;
 }
 
+function extractSlotNameFromBlock(inner, options = {}) {
+    const { componentId = '', componentIds = [] } = options;
+    const flattened = removeNestedBlocks(inner);
+    const idMatch = flattened.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
+    const nameMatch = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
+    let slotName = '';
+    if (idMatch) {
+        slotName = idMatch[1];
+    } else if (nameMatch) {
+        slotName = nameMatch[1];
+    } else {
+        const shorthandMatch = flattened.match(/^\s*([A-Za-z0-9_-]+)\s*;?\s*$/);
+        if (shorthandMatch) {
+            slotName = shorthandMatch[1];
+        }
+    }
+    if (slotName && componentIds.length && componentIds.includes(slotName)) {
+        componentLogger.error(componentId, `cannot name slots the same as components ("${slotName}").`);
+        return '';
+    }
+    return slotName;
+}
+
+function resolveQImportPath(block, componentId) {
+    const brace = block.indexOf('{');
+    if (brace === -1) {
+        componentLogger.warn(componentId, 'q-import is missing an opening brace.');
+        return '';
+    }
+    const close = findMatchingBrace(block, brace);
+    if (close === -1) {
+        componentLogger.warn(componentId, 'q-import is missing a closing brace.');
+        return '';
+    }
+    const inner = block.slice(brace + 1, close);
+    const flattened = removeNestedBlocks(inner);
+    let path = flattened.trim();
+    if (path.endsWith(';')) {
+        path = path.slice(0, -1).trim();
+    }
+    if (!path) {
+        componentLogger.warn(componentId, 'q-import has no path.');
+        return '';
+    }
+    if ((path.startsWith('"') && path.endsWith('"')) || (path.startsWith('\'') && path.endsWith('\''))) {
+        componentLogger.warn(componentId, 'q-import path must be raw text, not quoted.');
+        return '';
+    }
+    return path;
+}
+
+function resolveQImportUrl(path) {
+    if (typeof window === 'undefined' || !window.location) {
+        return path;
+    }
+    try {
+        if (path.startsWith('/')) {
+            return `${window.location.origin}${path}`;
+        }
+        return new URL(path, window.location.href).toString();
+    } catch (err) {
+        return path;
+    }
+}
+
+async function resolveQImports(input, state = { count: 0, limit: 100, warned: false }) {
+    let out = input;
+    let pos = 0;
+    while (true) {
+        const found = findTagInvocation(out, 'q-import', pos);
+        if (!found) break;
+
+        const block = out.slice(found.tagStart, found.braceClose + 1);
+        let replacement = '';
+
+        if (state.count >= state.limit) {
+            if (!state.warned) {
+                componentLogger.warn('', `q-import limit reached (${state.limit}); remaining imports skipped.`);
+                state.warned = true;
+            }
+        } else {
+            state.count += 1;
+            const path = resolveQImportPath(block, '');
+            if (path) {
+                const url = resolveQImportUrl(path);
+                try {
+                    const resp = await fetch(url, { cache: 'no-store' });
+                    if (!resp.ok) {
+                        componentLogger.warn('', `q-import failed to load "${url}" (${resp.status}).`);
+                    } else {
+                        const text = await resp.text();
+                        if (/<\s*q-html/i.test(text)) {
+                            componentLogger.warn('', `q-import rejected "${url}" because it contains <q-html>.`);
+                        } else {
+                            replacement = await resolveQImports(text, state);
+                        }
+                    }
+                } catch (err) {
+                    componentLogger.warn('', `q-import failed to load "${url}".`);
+                }
+            }
+        }
+
+        out = out.slice(0, found.tagStart) + replacement + out.slice(found.braceClose + 1);
+        pos = found.tagStart + replacement.length;
+    }
+    return out;
+}
+
 /**
  * Collect ranges of component invocations so nested structures can be
  * excluded from into resolution.
@@ -373,7 +531,7 @@ function collectComponentInvocationRanges(input, componentIds) {
     componentIds.forEach((id) => {
         let pos = 0;
         while (true) {
-            const found = findTagInvocation(input, id, pos);
+            const found = findTagInvocation(input, id, pos, { allowClasses: true });
             if (!found) break;
             ranges.push({ start: found.braceOpen, end: found.braceClose });
             pos = found.braceClose + 1;
@@ -399,7 +557,7 @@ function isIndexInsideRanges(index, ranges) {
  * @param {string[]} componentIds Known component tags
  * @returns {{directSlots: Map<string, number>, subcomponentSlots: Map<string, number>, slotNames: Set<string>}}
  */
-function collectTemplateSlotDefinitions(template, componentIds) {
+function collectTemplateSlotDefinitions(template, componentIds, componentId = '') {
     const directSlots = new Map();
     const subcomponentSlots = new Map();
     const slotNames = new Set();
@@ -419,10 +577,8 @@ function collectTemplateSlotDefinitions(template, componentIds) {
         const close = findMatchingBrace(template, open);
         if (close === -1) break;
         const inner = template.slice(open + 1, close);
-        const flattened = removeNestedBlocks(inner);
-        const match = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
-        if (match) {
-            const slotName = match[1];
+        const slotName = extractSlotNameFromBlock(inner, { componentId, componentIds });
+        if (slotName) {
             slotNames.add(slotName);
             const target = isIndexInsideRanges(idx, subcomponentRanges) ? subcomponentSlots : directSlots;
             target.set(slotName, (target.get(slotName) || 0) + 1);
@@ -514,6 +670,20 @@ function collectIntoNodes(body, componentIds, componentId) {
     return nodes;
 }
 
+function hasTopLevelIntoBlock(body, componentIds) {
+    const componentRanges = collectComponentInvocationRanges(body, componentIds);
+    let pos = 0;
+    while (true) {
+        const found = findTagInvocation(body, 'into', pos);
+        if (!found) break;
+        if (!isIndexInsideRanges(found.tagStart, componentRanges)) {
+            return true;
+        }
+        pos = found.braceClose + 1;
+    }
+    return false;
+}
+
 /**
  * Resolve an into target against a component's slot definitions. Resolution
  * prefers direct slots on the component, then slots declared inside
@@ -546,6 +716,48 @@ function resolveIntoSlotTarget(slotName, slotInfo, componentId) {
     return null;
 }
 
+function shouldMarkComponentSegment(tag) {
+    if (!tag) return false;
+    const { base } = parseTagWithClasses(tag);
+    const lower = base.trim().toLowerCase();
+    if (!lower) return false;
+    if (lower === 'html' || lower === 'text' || lower === 'css' || lower === 'style' || lower === 'slot' || lower === 'into') {
+        return false;
+    }
+    if (/^on[a-z0-9_]+$/.test(lower)) {
+        return false;
+    }
+    return true;
+}
+
+function addComponentOriginMarkers(source, componentId, options = {}) {
+    if (!componentId || !source) return source;
+    const { classes = [] } = options;
+    const segments = splitTopLevelSegments(source);
+    if (!segments.length) return source;
+    let out = source;
+    for (let i = segments.length - 1; i >= 0; i--) {
+        const seg = segments[i];
+        if (!shouldMarkComponentSegment(seg.tag)) continue;
+        const open = seg.braceOpen;
+        const close = seg.braceClose;
+        if (open == null || close == null) continue;
+        const inner = out.slice(open + 1, close);
+        const flattened = removeNestedBlocks(inner);
+        const insertionLines = [];
+        if (!/(?:^|\s)q-component\s*:/.test(flattened)) {
+            insertionLines.push(`q-component: "${componentId}";`);
+        }
+        if (classes && classes.length) {
+            insertionLines.push(`class: "${classes.join(' ')}";`);
+        }
+        if (!insertionLines.length) continue;
+        const insertion = `\n    ${insertionLines.join('\n    ')}`;
+        out = out.slice(0, open + 1) + insertion + out.slice(open + 1);
+    }
+    return out;
+}
+
 /**
  * Replace slot placeholders in a component template with content provided
  * via `slotMap`.  Slot placeholders have the form `slot { name: "slotName" }`.
@@ -570,9 +782,7 @@ function replaceTemplateSlots(template, slotMap, options = {}) {
         const close = findMatchingBrace(result, open);
         if (close === -1) break;
         const inner = result.slice(open + 1, close);
-        const flattened = removeNestedBlocks(inner);
-        const m = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
-        const slotName = m ? m[1] : '';
+        const slotName = extractSlotNameFromBlock(inner);
         const hasReplacement = slotName && slotMap.has(slotName);
         if (!hasReplacement && slotName && warnOnMissing) {
             componentLogger.warn(componentId, `No content provided for slot "${slotName}".`);
@@ -617,10 +827,9 @@ function collectTemplateSlotNames(template) {
         const close = findMatchingBrace(template, open);
         if (close === -1) break;
         const inner = template.slice(open + 1, close);
-        const flattened = removeNestedBlocks(inner);
-        const match = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
-        if (match) {
-            names.add(match[1]);
+        const slotName = extractSlotNameFromBlock(inner);
+        if (slotName) {
+            names.add(slotName);
         }
         pos = close + 1;
     }
@@ -725,11 +934,14 @@ function transformComponentDefinitionsHelper(input) {
         if (open === -1) break;
         const close = findMatchingBrace(out, open);
         if (close === -1) break;
+        const header = out.slice(start, open).trim();
+        const headerMatch = header.match(/^q-component\s+([^\s{]+)$/);
+        const headerId = headerMatch ? headerMatch[1] : '';
         const block = out.slice(start, close + 1);
         const inner = block.slice(block.indexOf('{') + 1, block.lastIndexOf('}'));
         const idMatch = inner.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
-        if (idMatch) {
-            const id = idMatch[1];
+        const id = idMatch ? idMatch[1] : headerId;
+        if (id) {
             const template = stripTopLevelProps(inner, ['id', 'slots']).trim();
             defs.push({ id, template });
             out = out.slice(0, start) + out.slice(close + 1);
@@ -741,7 +953,7 @@ function transformComponentDefinitionsHelper(input) {
     const componentIds = defs.map((def) => def.id);
     const slotRegistry = new Map();
     for (const def of defs) {
-        slotRegistry.set(def.id, collectTemplateSlotDefinitions(def.template, componentIds));
+        slotRegistry.set(def.id, collectTemplateSlotDefinitions(def.template, componentIds, def.id));
     }
 
     const maxPasses = Math.max(1, defs.length * 3);
@@ -757,18 +969,35 @@ function transformComponentDefinitionsHelper(input) {
                 subcomponentSlots: new Map(),
                 slotNames: new Set()
             };
+            const totalSlotCount = Array.from(slotInfo.directSlots.values()).reduce((a, b) => a + b, 0)
+                + Array.from(slotInfo.subcomponentSlots.values()).reduce((a, b) => a + b, 0);
+            let singleSlotName = '';
+            if (totalSlotCount === 1) {
+                if (slotInfo.directSlots.size === 1) {
+                    singleSlotName = Array.from(slotInfo.directSlots.keys())[0];
+                } else if (slotInfo.subcomponentSlots.size === 1) {
+                    singleSlotName = Array.from(slotInfo.subcomponentSlots.keys())[0];
+                }
+            }
             let pos = 0;
             while (true) {
-                const k = findTagInvocation(out, id, pos);
+                const k = findTagInvocation(out, id, pos, { allowClasses: true });
                 if (!k) break;
-                const { tagStart, braceOpen, braceClose } = k;
+                const { tagStart, braceOpen, braceClose, tagToken } = k;
+                const { classes: componentClasses } = parseTagWithClasses(tagToken || id);
                 const body = out.slice(braceOpen + 1, braceClose);
                 const children = splitTopLevelSegments(body);
                 const slotMap = new Map();
                 const slotEntries = [];
+                let hasSlotDirectives = false;
 
                 const intoNodes = collectIntoNodes(body, componentIds, id);
+                const hasIntoBlocks = hasTopLevelIntoBlock(body, componentIds);
                 for (const node of intoNodes) {
+                    if (!slotInfo.slotNames.size) {
+                        componentLogger.warn(id, `Component does not have slot named "${node.targetSlot}".`);
+                        continue;
+                    }
                     const resolved = resolveIntoSlotTarget(node.targetSlot, slotInfo, id);
                     if (!resolved) continue;
                     slotEntries.push({
@@ -781,13 +1010,33 @@ function transformComponentDefinitionsHelper(input) {
                     if (seg.tag === 'into') {
                         continue;
                     }
+                    if (slotInfo.slotNames.has(seg.tag) && !componentIds.includes(seg.tag)) {
+                        hasSlotDirectives = true;
+                        const innerStart = seg.block.indexOf('{');
+                        const innerEnd = seg.block.lastIndexOf('}');
+                        const injected = innerStart !== -1 && innerEnd > innerStart
+                            ? seg.block.slice(innerStart + 1, innerEnd).trim()
+                            : '';
+                        slotEntries.push({
+                            slotName: seg.tag,
+                            content: injected,
+                            position: typeof seg.start === 'number' ? seg.start : 0
+                        });
+                        continue;
+                    }
                     const directives = extractTopLevelSlotDirectives(seg.block);
                     if (!directives.length) continue;
+                    hasSlotDirectives = true;
                     let handled = false;
                     for (const directive of directives) {
                         const { target, slotName } = resolveSlotDirectiveTarget(directive, id);
                         if (target !== id || !slotName) {
                             continue;
+                        }
+                        if (!slotInfo.slotNames.size) {
+                            componentLogger.warn(id, `Component does not have slot named "${slotName}".`);
+                            handled = true;
+                            break;
                         }
                         if (slotInfo.slotNames.size && !slotInfo.slotNames.has(slotName)) {
                             componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
@@ -811,15 +1060,35 @@ function transformComponentDefinitionsHelper(input) {
                         }
                     }
                 }
+                const hasExplicitSlotUsage = hasIntoBlocks || hasSlotDirectives || slotEntries.length > 0;
+                if (!hasExplicitSlotUsage && singleSlotName) {
+                    const autoContent = children
+                        .filter((seg) => seg.tag !== 'into')
+                        .map((seg) => seg.block)
+                        .join('\n')
+                        .trim();
+                    if (autoContent) {
+                        slotEntries.push({
+                            slotName: singleSlotName,
+                            content: autoContent,
+                            position: 0
+                        });
+                    }
+                }
                 slotEntries.sort((a, b) => a.position - b.position);
                 for (const entry of slotEntries) {
                     const existing = slotMap.get(entry.slotName) || '';
                     slotMap.set(entry.slotName, existing + '\n' + entry.content);
                 }
 
-                const expanded = replaceTemplateSlots(template, slotMap, { componentId: id });
-                out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
-                pos = tagStart + expanded.length;
+                const suppressMissingWarnings = !hasExplicitSlotUsage && children.length === 0;
+                const expanded = replaceTemplateSlots(template, slotMap, {
+                    componentId: id,
+                    warnOnMissing: !suppressMissingWarnings
+                });
+                const marked = addComponentOriginMarkers(expanded, id, { classes: componentClasses });
+                out = out.slice(0, tagStart) + marked + out.slice(braceClose + 1);
+                pos = tagStart + marked.length;
                 changed = true;
             }
         }
@@ -1207,7 +1476,11 @@ function processPropertySegment(segment, parentElement) {
                     console.error('Error executing function for property', propName, err);
                     result = '';
                 }
-                parentElement.setAttribute(propName, result);
+                if (propName === 'class') {
+                    mergeClassAttribute(parentElement, result);
+                } else {
+                    parentElement.setAttribute(propName, result);
+                }
             }
         } catch (err) {
             console.error('Failed to compile function for property', segment.name, err);
@@ -1216,7 +1489,11 @@ function processPropertySegment(segment, parentElement) {
         if (segment.name === 'content' || segment.name === 'contents' || segment.name === 'text' || segment.name === 'textcontent' || segment.name === 'textcontents' || segment.name === 'innertext') {
             parentElement.innerHTML = decodeURIComponent(segment.value);
         } else {
-            parentElement.setAttribute(segment.name, segment.value);
+            if (segment.name === 'class') {
+                mergeClassAttribute(parentElement, segment.value);
+            } else {
+                parentElement.setAttribute(segment.name, segment.value);
+            }
         }
     }
 }
@@ -1231,29 +1508,44 @@ function processPropertySegment(segment, parentElement) {
  */
 function processElementSegment(segment, parentElement) {
     const createElementFromTag = (tagName) => {
+        const { base, classes } = parseTagWithClasses(tagName);
         const regex = /<(\w+)[\s>]/;
-        const match = tagName.match(regex);
-        return document.createElement(match ? match[1].toLowerCase() : tagName);
+        const match = base.match(regex);
+        const element = document.createElement(match ? match[1].toLowerCase() : base);
+        if (classes.length) {
+            mergeClassAttribute(element, classes.join(' '));
+        }
+        return { element, classes, base };
     };
     if (segment.tag.includes(',')) {
         const tags = segment.tag.split(',').map(t => t.trim());
         let currentParent = parentElement;
+        let innermostClasses = [];
         tags.forEach(tag => {
-            const newElement = createElementFromTag(tag);
-            currentParent.appendChild(newElement);
-            currentParent = newElement;
+            const created = createElementFromTag(tag);
+            currentParent.appendChild(created.element);
+            currentParent = created.element;
+            innermostClasses = created.classes;
         });
         const childSegments = extractPropertiesAndChildren(segment.content);
         childSegments.forEach(childSegment => processSegment(childSegment, currentParent));
+        if (innermostClasses.length) {
+            mergeClassAttribute(currentParent, innermostClasses.join(' '));
+        }
     } else {
-        const newElement = createElementFromTag(segment.tag);
-        if (segment.tag === 'script' || segment.tag === 'q-painter') {
+        const created = createElementFromTag(segment.tag);
+        const newElement = created.element;
+        const tagName = created.base;
+        if (tagName === 'script' || tagName === 'q-painter') {
             storeAndExecuteScriptLater(segment.content);
             newElement.text = segment.content;
             parentElement.appendChild(newElement);
         } else {
             const childSegments = extractPropertiesAndChildren(segment.content);
             childSegments.forEach(childSegment => processSegment(childSegment, newElement));
+            if (created.classes.length) {
+                mergeClassAttribute(newElement, created.classes.join(' '));
+            }
             parentElement.appendChild(newElement);
         }
     }
@@ -1371,8 +1663,9 @@ class QHtmlElement extends HTMLElement {
         this.render();
     }
 
-    render() {
-        const qhtmlContent = this.preprocess(this.innerHTML.trim().replace(/^"|"$/g, ''));
+    async render() {
+        const raw = this.innerHTML.trim().replace(/^"|"$/g, '');
+        const qhtmlContent = await this.preprocess(raw);
 
         const htmlContent = this.parseQHtml(qhtmlContent);
 
@@ -1383,13 +1676,11 @@ class QHtmlElement extends HTMLElement {
 
     }
 
-    preprocess(i_qhtml) {
-        // Delegate to top-level helpers for preprocessing.  The helpers
-        // perform semicolon insertion, backtick replacement and component
-        // expansion in sequence.  See the helper implementations above for
-        // details.  Additional preprocessing steps can be inserted here
-        // without modifying the core helpers.
-        let input = stripBlockComments(i_qhtml);
+    async preprocess(i_qhtml) {
+        // Resolve q-imports first so imported content participates in all
+        // later transformations (components, slots, and text helpers).
+        let input = await resolveQImports(i_qhtml);
+        input = stripBlockComments(input);
         input = addSemicolonToProperties(input);
         input = replaceBackticksWithQuotes(input);
         input = replaceLegacyTextPropsWithTextBlocks(input);
@@ -2183,14 +2474,18 @@ customElements.define('q-component', QComponent);
 // renders all HTML in-place of any q-html  then dispatch event when qhtml conversion is complete
 window.addEventListener("DOMContentLoaded", function () {
 
-    var elems = document.querySelectorAll("q-html")
+    var elems = document.querySelectorAll("q-html");
+    var renders = [];
     elems.forEach(function (elem) {
+        renders.push(Promise.resolve(elem.render()));
+    });
 
-        elem.render();
-
-    })
-    var qhtmlEvent = new CustomEvent('QHTMLContentLoaded', {});
-    document.dispatchEvent(qhtmlEvent);
+    Promise.all(renders).catch(function(err) {
+        console.warn('qhtml: render error', err);
+    }).finally(function() {
+        var qhtmlEvent = new CustomEvent('QHTMLContentLoaded', {});
+        document.dispatchEvent(qhtmlEvent);
+    });
 })
 
 window.addEventListener("QHTMLContentLoaded", function() {
