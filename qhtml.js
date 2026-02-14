@@ -1,6 +1,6 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v4.2
+ * v4.3
  * Added some shortcuts for parts of the language that were a bit redunant
  
  Now Can use the following:
@@ -474,7 +474,73 @@ function resolveQImportUrl(path) {
     }
 }
 
-async function resolveQImports(input, state = { count: 0, limit: 100, warned: false }) {
+const qImportSourceCache = new Map();
+const qImportInFlight = new Map();
+
+function ensureQImportResolveState(state) {
+    const next = state || {};
+    if (typeof next.count !== 'number') {
+        next.count = 0;
+    }
+    if (typeof next.limit !== 'number') {
+        next.limit = 100;
+    }
+    if (typeof next.warned !== 'boolean') {
+        next.warned = false;
+    }
+    return next;
+}
+
+async function resolveQImportSourceFromUrl(url) {
+    if (qImportSourceCache.has(url)) {
+        return qImportSourceCache.get(url);
+    }
+    if (qImportInFlight.has(url)) {
+        return qImportInFlight.get(url);
+    }
+
+    const loadPromise = (async () => {
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                componentLogger.warn('', `q-import failed to load "${url}" (${resp.status}).`);
+                qImportSourceCache.set(url, '');
+                return '';
+            }
+
+            const text = await resp.text();
+            if (/<\s*q-html/i.test(text)) {
+                componentLogger.warn('', `q-import rejected "${url}" because it contains <q-html>.`);
+                qImportSourceCache.set(url, '');
+                return '';
+            }
+            qImportSourceCache.set(url, text);
+            return text;
+        } catch (err) {
+            componentLogger.warn('', `q-import failed to load "${url}".`);
+            qImportSourceCache.set(url, '');
+            return '';
+        }
+    })();
+
+    qImportInFlight.set(url, loadPromise);
+    try {
+        return await loadPromise;
+    } finally {
+        qImportInFlight.delete(url);
+    }
+}
+
+async function resolveQImportFromUrl(url, state) {
+    const source = await resolveQImportSourceFromUrl(url);
+    if (!source) {
+        return '';
+    }
+    return resolveQImports(source, state);
+}
+
+async function resolveQImports(input, state = null) {
+    const runtimeState = ensureQImportResolveState(state);
     let out = input;
     let pos = 0;
     while (true) {
@@ -484,31 +550,17 @@ async function resolveQImports(input, state = { count: 0, limit: 100, warned: fa
         const block = out.slice(found.tagStart, found.braceClose + 1);
         let replacement = '';
 
-        if (state.count >= state.limit) {
-            if (!state.warned) {
-                componentLogger.warn('', `q-import limit reached (${state.limit}); remaining imports skipped.`);
-                state.warned = true;
+        if (runtimeState.count >= runtimeState.limit) {
+            if (!runtimeState.warned) {
+                componentLogger.warn('', `q-import limit reached (${runtimeState.limit}); remaining imports skipped.`);
+                runtimeState.warned = true;
             }
         } else {
-            state.count += 1;
+            runtimeState.count += 1;
             const path = resolveQImportPath(block, '');
             if (path) {
                 const url = resolveQImportUrl(path);
-                try {
-                    const resp = await fetch(url, { cache: 'no-store' });
-                    if (!resp.ok) {
-                        componentLogger.warn('', `q-import failed to load "${url}" (${resp.status}).`);
-                    } else {
-                        const text = await resp.text();
-                        if (/<\s*q-html/i.test(text)) {
-                            componentLogger.warn('', `q-import rejected "${url}" because it contains <q-html>.`);
-                        } else {
-                            replacement = await resolveQImports(text, state);
-                        }
-                    }
-                } catch (err) {
-                    componentLogger.warn('', `q-import failed to load "${url}".`);
-                }
+                replacement = await resolveQImportFromUrl(url, runtimeState);
             }
         }
 
@@ -1161,6 +1213,11 @@ function sanitizeInlineHandler(scriptBody) {
     return out.trim();
 }
 
+function isReadyLifecycleName(name) {
+    const normalized = String(name || '').toLowerCase();
+    return normalized === 'onready' || normalized === 'onload' || normalized === 'onloaded';
+}
+
 /**
  * Extract a flat list of property and child element segments from a qhtml
  * invocation. Produces segments of type: 'property' | 'element' | 'html' | 'css'.
@@ -1233,8 +1290,17 @@ function extractPropertiesAndChildren(input) {
   const decEventDepth = () => { if (currentSegment) currentSegment._depth--; };
   const endEventBlock = () => {
     const raw = currentSegment._buf.join('');
-    const cleaned = sanitizeInlineHandler(raw);
-    segments.push({ type: 'property', name: currentSegment.name, value: cleaned });
+    if (isReadyLifecycleName(currentSegment.name)) {
+      segments.push({
+        type: 'property',
+        name: currentSegment.name,
+        value: raw.trim(),
+        isReadyLifecycle: true
+      });
+    } else {
+      const cleaned = sanitizeInlineHandler(raw);
+      segments.push({ type: 'property', name: currentSegment.name, value: cleaned });
+    }
     currentSegment = null;
   };
 
@@ -1430,6 +1496,37 @@ function processTextSegment(segment, parentElement) {
   parentElement.appendChild(document.createTextNode(textString));
 }
 
+function queueReadyLifecycleHook(parentElement, scriptBody) {
+    if (!parentElement) {
+        return;
+    }
+    const body = String(scriptBody || '').trim();
+    if (!body) {
+        return;
+    }
+    if (!Array.isArray(parentElement.__qhtmlReadyHooks)) {
+        parentElement.__qhtmlReadyHooks = [];
+    }
+    parentElement.__qhtmlReadyHooks.push(body);
+}
+
+function flushReadyLifecycleHooks(parentElement, fallbackThis) {
+    if (!parentElement || !Array.isArray(parentElement.__qhtmlReadyHooks) || !parentElement.__qhtmlReadyHooks.length) {
+        return;
+    }
+    const queued = parentElement.__qhtmlReadyHooks.slice();
+    parentElement.__qhtmlReadyHooks.length = 0;
+    const boundThis = fallbackThis || parentElement;
+    queued.forEach((scriptBody) => {
+        try {
+            const fn = new Function(scriptBody);
+            fn.call(boundThis);
+        } catch (err) {
+            console.error('Failed to execute onReady/onLoad lifecycle block', err);
+        }
+    });
+}
+
 
 /**
  * Process a property segment.  Handles static properties, content/text
@@ -1440,6 +1537,19 @@ function processTextSegment(segment, parentElement) {
  * @param {HTMLElement} parentElement The DOM element receiving the property
  */
 function processPropertySegment(segment, parentElement) {
+    const propNameRaw = String(segment.name || '');
+    const propNameLower = propNameRaw.toLowerCase();
+    if (segment.isReadyLifecycle || (segment.isFunction && isReadyLifecycleName(propNameRaw))) {
+        let lifecycleBody = segment.value;
+        try {
+            lifecycleBody = decodeURIComponent(lifecycleBody);
+        } catch {
+            // ignore decoding errors and use raw body
+        }
+        queueReadyLifecycleHook(parentElement, lifecycleBody);
+        return;
+    }
+
     if (segment.isFunction) {
         let fnBody = segment.value;
         try {
@@ -1449,50 +1559,49 @@ function processPropertySegment(segment, parentElement) {
         }
         try {
             const fn = new Function(fnBody);
-            const propName = segment.name;
-            if (propName === 'content' || propName === 'contents' || propName === 'text' || propName === 'textcontent' || propName === 'textcontents' || propName === 'innertext') {
+            if (propNameLower === 'content' || propNameLower === 'contents' || propNameLower === 'text' || propNameLower === 'textcontent' || propNameLower === 'textcontents' || propNameLower === 'innertext') {
                 let result;
                 try {
                     result = fn.call(parentElement);
                 } catch (err) {
-                    console.error('Error executing function for property', propName, err);
+                    console.error('Error executing function for property', propNameRaw, err);
                     result = '';
                 }
                 parentElement.innerHTML = result;
-            } else if (/^on\w+/i.test(propName)) {
+            } else if (/^on\w+/i.test(propNameRaw)) {
                 const handler = function(event) {
                     try {
                         return fn.call(this, event);
                     } catch (err) {
-                        console.error('Error executing event handler for', propName, err);
+                        console.error('Error executing event handler for', propNameRaw, err);
                     }
                 };
-                parentElement[propName.toLowerCase()] = handler;
+                parentElement[propNameLower] = handler;
             } else {
                 let result;
                 try {
                     result = fn.call(parentElement);
                 } catch (err) {
-                    console.error('Error executing function for property', propName, err);
+                    console.error('Error executing function for property', propNameRaw, err);
                     result = '';
                 }
-                if (propName === 'class') {
+                if (propNameLower === 'class') {
                     mergeClassAttribute(parentElement, result);
                 } else {
-                    parentElement.setAttribute(propName, result);
+                    parentElement.setAttribute(propNameRaw, result);
                 }
             }
         } catch (err) {
             console.error('Failed to compile function for property', segment.name, err);
         }
     } else {
-        if (segment.name === 'content' || segment.name === 'contents' || segment.name === 'text' || segment.name === 'textcontent' || segment.name === 'textcontents' || segment.name === 'innertext') {
+        if (propNameLower === 'content' || propNameLower === 'contents' || propNameLower === 'text' || propNameLower === 'textcontent' || propNameLower === 'textcontents' || propNameLower === 'innertext') {
             parentElement.innerHTML = decodeURIComponent(segment.value);
         } else {
-            if (segment.name === 'class') {
+            if (propNameLower === 'class') {
                 mergeClassAttribute(parentElement, segment.value);
             } else {
-                parentElement.setAttribute(segment.name, segment.value);
+                parentElement.setAttribute(propNameRaw, segment.value);
             }
         }
     }
@@ -1532,6 +1641,7 @@ function processElementSegment(segment, parentElement) {
         if (innermostClasses.length) {
             mergeClassAttribute(currentParent, innermostClasses.join(' '));
         }
+        flushReadyLifecycleHooks(currentParent);
     } else {
         const created = createElementFromTag(segment.tag);
         const newElement = created.element;
@@ -1547,6 +1657,7 @@ function processElementSegment(segment, parentElement) {
                 mergeClassAttribute(newElement, created.classes.join(' '));
             }
             parentElement.appendChild(newElement);
+            flushReadyLifecycleHooks(newElement);
         }
     }
 }
@@ -1945,11 +2056,13 @@ transformComponentDefinitions(input) {
         const _adjustedInput = addClosingBraces(_preprocessedInput);
         const _root = document.createElement('div');
         _root.__qhtmlRoot = true;
+        _root.__qhtmlHost = this;
         // Always use the top-level extract/process helpers rather than any nested versions
         const _extract = (typeof window !== 'undefined' && window.extractPropertiesAndChildren) ? window.extractPropertiesAndChildren : extractPropertiesAndChildren;
         const _process = (typeof window !== 'undefined' && window.processSegment) ? window.processSegment : processSegment;
         const _segments = _extract(_adjustedInput);
         _segments.forEach(seg => _process(seg, _root));
+        flushReadyLifecycleHooks(_root, _root.__qhtmlHost || _root);
         return _root.outerHTML;
 
             // Function to find the matching closing brace for each opening brace and add closing braces accordingly
