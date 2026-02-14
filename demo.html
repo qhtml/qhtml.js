@@ -6,12 +6,13 @@
     <title>QHTML Demo</title> 
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
-	<script src="bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->   
+	<script src="https://qhtml.github.io/qhtml.js/bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->   
     <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
+    <script src="tools/qhtml-tools.js" type="text/javascript"></script>
     <script src="codemirror/codemirror.js" type="text/javascript"></script> <!-- codemirror v6 bundle -->
     <link rel="stylesheet" href="codemirror/codemirror.css"> <!-- codemirror base styles -->
-    <link rel="stylesheet" href="bs.css"> <!--  bs-tags.js dependency -->
-	<link rel="stylesheet" href="w3.css"> <!--  w3-tags.js dependency -->
+    <link rel="stylesheet" href="https://qhtml.github.io/qhtml.js/bs.css"> <!--  bs-tags.js dependency -->
+	<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
     <style>
         code-view:not(:defined) { display: none; }
         :root{
@@ -80,7 +81,7 @@
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             overflow: hidden;
-            background: linear-gradient(160deg, #07111f 0%, #121d2f 45%, #1b2435 100%);
+            background: #fff;
         }
         .qhtml-tabs {
             display: flex;
@@ -479,6 +480,7 @@
                 this._showRenderedHtml = false;
                 this._htmlRaw = '';
                 this._compiledHtmlRaw = '';
+                this._htmlRenderVersion = 0;
             }
 
             connectedCallback() {
@@ -679,11 +681,22 @@
                 }
             }
 
-            _updateOutputs() {
-                this._htmlRaw = this._renderHtmlFromQhtml(this._qhtmlSource);
+            async _updateOutputs() {
+                const source = this._qhtmlSource || '';
+                const renderVersion = ++this._htmlRenderVersion;
+                let raw = '';
+                try {
+                    raw = await this._renderHtmlFromQhtml(source);
+                } catch (err) {
+                    console.warn('QHTML parse failed:', err);
+                }
+                if (renderVersion !== this._htmlRenderVersion) {
+                    return;
+                }
+                this._htmlRaw = raw || '';
                 this._htmlOutput = formatHTML(this._htmlRaw);
                 this._updateHtmlTab();
-                this._updatePreview(this._qhtmlSource);
+                this._updatePreview(source);
             }
 
             _updateHtmlTab() {
@@ -856,18 +869,8 @@
                 sel.addRange(range);
             }
 
-            _renderHtmlFromQhtml(source) {
-                if (!source) return '';
-                const qhtml = source.trim().replace(/^"|"$/g, '');
-                const scratch = this._scratchQhtml || document.createElement('q-html');
-                this._scratchQhtml = scratch;
-                if (typeof scratch.preprocess !== 'function' || typeof scratch.parseQHtml !== 'function') {
-                    return source;
-                }
-                const pre = scratch.preprocess(qhtml);
-                const html = scratch.parseQHtml(pre);
-                const regex = /"{1}([^\"]*)"{1}/mg;
-                return html.replace(regex, (match, p1) => '"' + decodeURIComponent(p1) + '"');
+            async _renderHtmlFromQhtml(source) {
+                return renderHtmlFromQhtml(source, this._scratchQhtml);
             }
 
             _updatePreview(source) {
@@ -1017,14 +1020,39 @@
             });
         }
 
-        function renderHtmlFromQhtml(source, scratch) {
+        function getQhtmlToolsApi() {
+            if (window.qhtmlTools && typeof window.qhtmlTools.toHTML === 'function') return window.qhtmlTools;
+            if (window['qhtml-tools'] && typeof window['qhtml-tools'].toHTML === 'function') return window['qhtml-tools'];
+            if (window.qhtml && typeof window.qhtml.toHTML === 'function') return window.qhtml;
+            return null;
+        }
+
+        function removeNewBodyQHtmlNodes(beforeSet) {
+            const nodes = document.querySelectorAll('body > q-html');
+            nodes.forEach((node) => {
+                if (!beforeSet.has(node)) node.remove();
+            });
+        }
+
+        async function renderHtmlFromQhtml(source, scratch) {
             if (!source) return '';
-            const qhtml = source.trim().replace(/^\"|\"$/g, '');
+            const qhtmlSource = source.trim().replace(/^\"|\"$/g, '');
+            const toolsApi = getQhtmlToolsApi();
+            if (toolsApi && typeof toolsApi.toHTML === 'function') {
+                const before = new Set(Array.from(document.querySelectorAll('body > q-html')));
+                try {
+                    const html = await Promise.resolve(toolsApi.toHTML(qhtmlSource));
+                    return html || '';
+                } finally {
+                    removeNewBodyQHtmlNodes(before);
+                }
+            }
+
             const scratchEl = scratch || document.createElement('q-html');
             if (typeof scratchEl.preprocess !== 'function' || typeof scratchEl.parseQHtml !== 'function') {
                 return source;
             }
-            const pre = scratchEl.preprocess(qhtml);
+            const pre = scratchEl.preprocess(qhtmlSource);
             const html = scratchEl.parseQHtml(pre);
             const regex = /\"{1}([^\\\"]*)\"{1}/mg;
             return html.replace(regex, (match, p1) => '\"' + decodeURIComponent(p1) + '\"');
@@ -1115,7 +1143,8 @@
                 previewHost: null,
                 htmlRaw: '',
                 compiledHtml: '',
-                showRendered: false
+                showRendered: false,
+                renderVersion: 0
             };
 
             const updateHtmlView = () => {
@@ -1147,12 +1176,16 @@
                 });
             };
 
-            const updateOutputs = (source) => {
+            const updateOutputs = async (source) => {
+                const renderVersion = ++state.renderVersion;
                 let htmlRaw = '';
                 try {
-                    htmlRaw = renderHtmlFromQhtml(source, state.scratch);
+                    htmlRaw = await renderHtmlFromQhtml(source, state.scratch);
                 } catch (err) {
                     console.warn('QHTML parse failed:', err);
+                }
+                if (renderVersion !== state.renderVersion) {
+                    return;
                 }
                 state.htmlRaw = formatHTML(htmlRaw);
                 updatePreview(source);
@@ -1248,7 +1281,7 @@
     </script>
 
 </head>
-<body class="w3-text-white" style="background: linear-gradient(160deg, #07111f 0%, #121d2f 45%, #1b2435 100%);">
+<body>
     <!-- Sample usage of the q-html component to make the whole page -->
 
  <q-html>
@@ -1519,8 +1552,3 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 </script>
 </body>
 </html>
-
-
-
-
-
