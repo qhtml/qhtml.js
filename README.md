@@ -262,3 +262,108 @@ Use Bootstrap class tags the same way:
 ## Demo
 
 Open `demo.html` for a live playground.
+
+
+## 📊 Project Metrics Summary
+
+### 🗓 Timeline
+- **Spec timeline:** **Unavailable**
+  - `spec_memory.created_at` is empty in all rows  
+  - **0 / 113** timestamps populated
+
+---
+
+### 📝 Specification Activity
+- **Total spec entries:** **113**
+
+**Spec focus areas (root path scope):**
+- into — **34**
+- demo — **20**
+- q-import — **19**
+- slot — **16**
+- syntax — **13**
+- component — **7**
+
+---
+
+### 📋 Requirements & Governance
+- **Requirements (total):** **42**
+  - Closed — **42**
+  - Approved — **0**
+  - Superseded — **0**
+
+- **Decisions + Constraints (total):** **37**
+  - Decisions — **3**
+  - Constraints — **34**
+
+---
+
+### ❓ Question Handling
+- **Total questions:** **25**
+  - Closed — **25**
+  - Approved — **0**
+  - Open — **0**
+
+- **Completion gate health:**  
+  - Open questions — **0**  
+  - Open requirement/decision/constraint rows — **0**
+
+---
+
+### 🚀 Delivery & Change Management
+- **Total changes shipped:** **5**
+- **Completion rate:** **5 / 5 (100%)**
+
+---
+
+### 📚 Definition Catalog
+- **Total definitions:** **155**
+- **Files covered:** **14**
+- **Average definitions per file:** **11.07**
+
+**Definition type mix:**
+- function — **147**
+- class — **3**
+- const — **3**
+- method — **2**
+
+---
+
+### 🔗 Change Impact & Coverage (Definition-Level)
+- **change_defs links:** **0**
+- **Average defs per change:** **0.00**
+- **Unique defs touched:** **0 (0.00%)**
+- **Tracking coverage (definition-level):** **0 / 5 (0.00%)**
+
+**Most frequently touched definition:**  
+- **Unavailable** (change_defs table is empty)
+
+---
+
+### 📁 Change Impact (File-Level)
+- **Tracking coverage (file-level):** **5 / 5 (100%)**
+- **Files touched:** **7**
+- **Total file-touch links:** **10**
+- **Hotspot concentration:** Top 3 files account for **60.00%** of all file touches
+
+**Top touched files:**
+- `qhtml.js` — **4**
+- `README.md` — **1**
+- `codemirror/codemirror-src.js` — **1**
+- `codemirror/codemirror.js` — **1**
+- `package-lock.json` — **1**
+- `package.json` — **1**
+- `rollup.config.js` — **1**
+
+---
+
+### 📡 Process Signals
+- **refs table rows:** **0**  
+  _(Reference graph not populated)_
+- **todo table rows:** **0**
+
+---
+
+### 📈 Catalog Concentration
+- **Top 2 files by definition count:** `qhtml.js`, `wheel.sh`
+- **Definition concentration:** **72.90%** of all defs reside in these two files
