@@ -1874,7 +1874,7 @@ async function loadScriptBlob(url) {
 }
 
 // Example usage
-loadScriptBlob('bs.js');
+//loadScriptBlob('bs.js');
 
 
 
@@ -1910,6 +1910,6 @@ async function loadStylesheet(url) {
 }
 
 // Example usage
-loadStylesheet('bs.css');
+
 
 })();
