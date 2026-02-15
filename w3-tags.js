@@ -1,7 +1,7 @@
 /*
  *  
  * additional custom elements to have fun with 
- *  adds all classes from w3.css v5.0 as HTML tags that you can use by nesting. 
+ *  adds all classes from w3.css as HTML tags that you can use by nesting. 
  *  designed to be used with qhtml.js but works standalone too
  *
  *
@@ -273,9 +273,6 @@ customElements.define('w3-hide-medium', createW3CustomElementClass());
 customElements.define('w3-hide-small', createW3CustomElementClass());
 customElements.define('w3-hide-large', createW3CustomElementClass());
 customElements.define('w3-mobile', createW3CustomElementClass());
-customElements.define('w3-grid', createW3CustomElementClass());
-customElements.define('w3-gridtemplate', createW3CustomElementClass());
-customElements.define('w3-flex', createW3CustomElementClass());
 
 // w3-hover-border-color is already defined in the hover effect classes
 (async function() { 
@@ -312,6 +309,5 @@ async function loadStylesheet(url) {
 
 // Example usage
 loadStylesheet('w3.css');
-
 
 })()
