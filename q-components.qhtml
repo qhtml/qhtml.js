@@ -106,58 +106,6 @@ q-component q-tab-navbutton {
     slot { tab-label }
   }
 }
-/*
-    q-tab-widget.m0 {
-      nav,div.nav.nav-tabs.mb-3 {
-        button.nav-link.active {
-          data-bs-toggle: "tab"
-          data-bs-target: "#nav-home"
-          role: "tab"
-
-          text { Home }
-        }
-        button.nav-link {
-          data-bs-toggle: "tab"
-          data-bs-target: "#nav-profile"
-          role: "tab"
-
-          text { Profile }
-        }
-
-        button.nav-link {
-          data-bs-toggle: "tab"
-          data-bs-target: "#nav-contact"
-          role: "tab"
-
-          text { Contact }
-        }
-
-      }
-
-      div.tab-content {
-        div.tab-pane.fade.active.show {
-          id: "nav-home";
-          role: "tabpanel";
-          aria-labelledby:"nav-home-tab";
-          p.w3-container { text { Heres a great article about saying hello to the world. only the way everybody else does it -- by saying hello world... only in latin... okay can i type now hello} }
-        }
-        div.tab-pane.fade {
-          id: "nav-profile";
-          role: "tabpanel";
-          aria-labelledby:"nav-profile-tab";
-          p.w3-container { text { Profile content } }
-        }
-        div.tab-pane.fade {
-          id: "nav-contact";
-          role: "tabpanel";
-          aria-labelledby:"nav-contact-tab";
-          p.w3-container { text { hello world hello world hello world hello world hello world hello world  hello world hello world  } }
-        }
-      }
-    }
-
-
-*/
 q-component q-tab-pane {
   div.tab-pane.fade {
     role: "tabpanel";
@@ -180,33 +128,171 @@ q-component q-tab-widget {
 }
 
 q-component q-abstract-tab-widget {
-  q-tab-widget {
-    q-tab-navbar {
-      q-tab-navbutton.active {
-        tab-pane: "tab-pane-1";
+  q-tab-widget.m0 {
+    nav,div.nav.nav-tabs.mb-3 {
+      id: "nav-tab";
+      role: "tablist";
+
+      button.nav-link.active {
+        id: "nav-home-tab";
+        data-bs-toggle: "tab";
+        data-bs-target: "#nav-home";
+        role: "tab";
+        aria-controls: "nav-home";
+        aria-selected: "true";
+        onclick {
+          const targetSelector = (this.getAttribute('data-bs-target') || '').trim();
+          if (!targetSelector) return;
+
+          const paneId = targetSelector.replace(/^#/, '');
+          const tabList = this.parentElement;
+          if (tabList) {
+            tabList.querySelectorAll('.nav-link').forEach((button) => {
+              button.classList.remove('active');
+              button.setAttribute('aria-selected', 'false');
+              button.setAttribute('tabindex', '-1');
+            });
+          }
+
+          this.classList.add('active');
+          this.setAttribute('aria-selected', 'true');
+          this.removeAttribute('tabindex');
+
+          let scope = tabList ? tabList.parentElement : this.parentElement;
+          while (scope && !scope.querySelector('.tab-content')) {
+            scope = scope.parentElement;
+          }
+
+          const paneRoot = (scope && scope.querySelector('.tab-content')) || document;
+          paneRoot.querySelectorAll('.tab-pane').forEach((pane) => {
+            pane.classList.remove('active');
+            pane.classList.remove('show');
+          });
+
+          const targetPane = paneRoot.querySelector(targetSelector) || document.querySelector(targetSelector);
+          if (targetPane) {
+            targetPane.classList.add('active');
+            targetPane.classList.add('show');
+            targetPane.setAttribute('aria-labelledby', this.id || (paneId + '-tab'));
+          }
+        }
         slot { button-1 }
       }
-      q-tab-navbutton {
-        tab-pane: "tab-pane-2";
+
+      button.nav-link {
+        id: "nav-profile-tab";
+        data-bs-toggle: "tab";
+        data-bs-target: "#nav-profile";
+        role: "tab";
+        aria-controls: "nav-profile";
+        aria-selected: "false";
+        tabindex: "-1";
+        onclick {
+          const targetSelector = (this.getAttribute('data-bs-target') || '').trim();
+          if (!targetSelector) return;
+
+          const paneId = targetSelector.replace(/^#/, '');
+          const tabList = this.parentElement;
+          if (tabList) {
+            tabList.querySelectorAll('.nav-link').forEach((button) => {
+              button.classList.remove('active');
+              button.setAttribute('aria-selected', 'false');
+              button.setAttribute('tabindex', '-1');
+            });
+          }
+
+          this.classList.add('active');
+          this.setAttribute('aria-selected', 'true');
+          this.removeAttribute('tabindex');
+
+          let scope = tabList ? tabList.parentElement : this.parentElement;
+          while (scope && !scope.querySelector('.tab-content')) {
+            scope = scope.parentElement;
+          }
+
+          const paneRoot = (scope && scope.querySelector('.tab-content')) || document;
+          paneRoot.querySelectorAll('.tab-pane').forEach((pane) => {
+            pane.classList.remove('active');
+            pane.classList.remove('show');
+          });
+
+          const targetPane = paneRoot.querySelector(targetSelector) || document.querySelector(targetSelector);
+          if (targetPane) {
+            targetPane.classList.add('active');
+            targetPane.classList.add('show');
+            targetPane.setAttribute('aria-labelledby', this.id || (paneId + '-tab'));
+          }
+        }
         slot { button-2 }
       }
-      q-tab-navbutton {
-        tab-pane: "tab-pane-3";
+
+      button.nav-link {
+        id: "nav-contact-tab";
+        data-bs-toggle: "tab";
+        data-bs-target: "#nav-contact";
+        role: "tab";
+        aria-controls: "nav-contact";
+        aria-selected: "false";
+        tabindex: "-1";
+        onclick {
+          const targetSelector = (this.getAttribute('data-bs-target') || '').trim();
+          if (!targetSelector) return;
+
+          const paneId = targetSelector.replace(/^#/, '');
+          const tabList = this.parentElement;
+          if (tabList) {
+            tabList.querySelectorAll('.nav-link').forEach((button) => {
+              button.classList.remove('active');
+              button.setAttribute('aria-selected', 'false');
+              button.setAttribute('tabindex', '-1');
+            });
+          }
+
+          this.classList.add('active');
+          this.setAttribute('aria-selected', 'true');
+          this.removeAttribute('tabindex');
+
+          let scope = tabList ? tabList.parentElement : this.parentElement;
+          while (scope && !scope.querySelector('.tab-content')) {
+            scope = scope.parentElement;
+          }
+
+          const paneRoot = (scope && scope.querySelector('.tab-content')) || document;
+          paneRoot.querySelectorAll('.tab-pane').forEach((pane) => {
+            pane.classList.remove('active');
+            pane.classList.remove('show');
+          });
+
+          const targetPane = paneRoot.querySelector(targetSelector) || document.querySelector(targetSelector);
+          if (targetPane) {
+            targetPane.classList.add('active');
+            targetPane.classList.add('show');
+            targetPane.setAttribute('aria-labelledby', this.id || (paneId + '-tab'));
+          }
+        }
         slot { button-3 }
       }
     }
 
-    q-tab-content {
-      q-tab-pane.active.show {
-        tab-pane: "tab-pane-1";
+    div.tab-content {
+      id: "nav-tabContent";
+
+      div.tab-pane.fade.active.show {
+        id: "nav-home";
+        role: "tabpanel";
+        aria-labelledby: "nav-home-tab";
         slot { pane-1 }
       }
-      q-tab-pane {
-        tab-pane: "tab-pane-2";
+      div.tab-pane.fade {
+        id: "nav-profile";
+        role: "tabpanel";
+        aria-labelledby: "nav-profile-tab";
         slot { pane-2 }
       }
-      q-tab-pane {
-        tab-pane: "tab-pane-3";
+      div.tab-pane.fade {
+        id: "nav-contact";
+        role: "tabpanel";
+        aria-labelledby: "nav-contact-tab";
         slot { pane-3 }
       }
     }
