@@ -31,6 +31,7 @@ q-component q-tab-navbar {
   }
 }
 
+
 q-component q-tab-navbutton {
   button.nav-link {
     data-bs-toggle: "tab";
@@ -73,14 +74,95 @@ q-component q-tab-navbutton {
         pane.classList.remove('show');
       });
 
-      const targetPane = paneRoot.querySelector(targetSelector) || document.querySelector(targetSelector);
+      let targetPane = paneRoot.querySelector(targetSelector);
+      if (!targetPane) {
+        paneRoot.querySelectorAll('.tab-pane').forEach((pane) => {
+          const paneRef = (pane.getAttribute('tab-pane') || '').trim().replace(/^#/, '');
+          if (!targetPane && paneRef === paneId) {
+            targetPane = pane;
+          }
+        });
+      }
+      if (!targetPane) {
+        targetPane = document.querySelector(targetSelector);
+      }
+      if (!targetPane) {
+        document.querySelectorAll('.tab-pane').forEach((pane) => {
+          const paneRef = (pane.getAttribute('tab-pane') || '').trim().replace(/^#/, '');
+          if (!targetPane && paneRef === paneId) {
+            targetPane = pane;
+          }
+        });
+      }
       if (targetPane) {
+        if (!targetPane.id) {
+          targetPane.id = paneId;
+        }
         targetPane.classList.add('active');
         targetPane.classList.add('show');
         targetPane.setAttribute('aria-labelledby', this.id);
       }
     }
     slot { tab-label }
+  }
+}
+/*
+    q-tab-widget.m0 {
+      nav,div.nav.nav-tabs.mb-3 {
+        button.nav-link.active {
+          data-bs-toggle: "tab"
+          data-bs-target: "#nav-home"
+          role: "tab"
+
+          text { Home }
+        }
+        button.nav-link {
+          data-bs-toggle: "tab"
+          data-bs-target: "#nav-profile"
+          role: "tab"
+
+          text { Profile }
+        }
+
+        button.nav-link {
+          data-bs-toggle: "tab"
+          data-bs-target: "#nav-contact"
+          role: "tab"
+
+          text { Contact }
+        }
+
+      }
+
+      div.tab-content {
+        div.tab-pane.fade.active.show {
+          id: "nav-home";
+          role: "tabpanel";
+          aria-labelledby:"nav-home-tab";
+          p.w3-container { text { Heres a great article about saying hello to the world. only the way everybody else does it -- by saying hello world... only in latin... okay can i type now hello} }
+        }
+        div.tab-pane.fade {
+          id: "nav-profile";
+          role: "tabpanel";
+          aria-labelledby:"nav-profile-tab";
+          p.w3-container { text { Profile content } }
+        }
+        div.tab-pane.fade {
+          id: "nav-contact";
+          role: "tabpanel";
+          aria-labelledby:"nav-contact-tab";
+          p.w3-container { text { hello world hello world hello world hello world hello world hello world  hello world hello world  } }
+        }
+      }
+    }
+
+
+*/
+q-component q-tab-pane {
+  div.tab-pane.fade {
+    role: "tabpanel";
+    tab-pane: "";
+    slot { pane-content }
   }
 }
 
@@ -94,5 +176,62 @@ q-component q-tab-content {
 q-component q-tab-widget {
   div.bd-example.m-0.border-0 {
     slot { main }
+  }
+}
+
+q-component q-abstract-tab-widget {
+  q-tab-widget {
+    q-tab-navbar {
+      q-tab-navbutton.active {
+        tab-pane: "tab-pane-1";
+        slot { button-1 }
+      }
+      q-tab-navbutton {
+        tab-pane: "tab-pane-2";
+        slot { button-2 }
+      }
+      q-tab-navbutton {
+        tab-pane: "tab-pane-3";
+        slot { button-3 }
+      }
+    }
+
+    q-tab-content {
+      q-tab-pane.active.show {
+        tab-pane: "tab-pane-1";
+        slot { pane-1 }
+      }
+      q-tab-pane {
+        tab-pane: "tab-pane-2";
+        slot { pane-2 }
+      }
+      q-tab-pane {
+        tab-pane: "tab-pane-3";
+        slot { pane-3 }
+      }
+    }
+  }
+}
+
+q-component my-tab-widget {
+  q-abstract-tab-widget {
+    button-1 {
+      slot { button-1 }
+    }
+    button-2 {
+      slot { button-2 }
+    }
+    button-3 {
+      slot { button-3 }
+    }
+    pane-1 {
+      slot { pane-1 }
+    }
+    pane-2 {
+      slot { pane-2 }
+    }
+    pane-3 {
+      slot { pane-3 }
+    }
   }
 }
