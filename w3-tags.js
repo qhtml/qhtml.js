@@ -308,6 +308,6 @@ async function loadStylesheet(url) {
 }
 
 // Example usage
-loadStylesheet('w3.css');
+//loadStylesheet('w3.css');
 
 })()
