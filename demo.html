@@ -7,13 +7,110 @@
     <script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
     <script src="q-script.js" type="text/javascript"></script> <!-- required for q-html parsing -->
 	<script src="https://qhtml.github.io/qhtml.js/bs-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->   
-    <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
-    <script src="tools/qhtml-tools.js" type="text/javascript"></script>
-    <script src="codemirror/codemirror.js" type="text/javascript"></script> <!-- codemirror v6 bundle -->
+	    <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon -->
+	    <script src="tools/qhtml-tools.js" type="text/javascript"></script>
+	    <script src="q-editor.js" type="text/javascript"></script>
+	    <script src="codemirror/codemirror.js" type="text/javascript"></script> <!-- codemirror v6 bundle -->
     <link rel="stylesheet" href="codemirror/codemirror.css"> <!-- codemirror base styles -->
     <link rel="stylesheet" href="https://qhtml.github.io/qhtml.js/bs.css"> <!--  bs-tags.js dependency -->
-	<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css"> <!--  w3-tags.js dependency -->
+	<link rel="stylesheet" href="w3.css"> <!--  w3-tags.js dependency -->
     <style>
+    .w3-theme-l5 {
+    color: #000 !important;
+    background-color: #e8effa !important
+}
+
+.w3-theme-l4 {
+    color: #000 !important;
+    background-color: #b2cbed !important
+}
+
+.w3-theme-l3 {
+    color: #fff !important;
+    background-color: #6496dc !important
+}
+
+.w3-theme-l2 {
+    color: #fff !important;
+    background-color: #2a65b8 !important
+}
+
+.w3-theme-l1 {
+    color: #fff !important;
+    background-color: #183a6a !important
+}
+
+.w3-theme-d1 {
+    color: #fff !important;
+    background-color: #060e1a !important
+}
+
+.w3-theme-d2 {
+    color: #fff !important;
+    background-color: #050d17 !important
+}
+
+.w3-theme-d3 {
+    color: #fff !important;
+    background-color: #050b14 !important
+}
+
+.w3-theme-d4 {
+    color: #fff !important;
+    background-color: #040a11 !important
+}
+
+.w3-theme-d5 {
+    color: #fff !important;
+    background-color: #03080f !important
+}
+
+.w3-theme-bg {
+    color: #fff !important;
+    background-color: #07111f !important
+}
+
+.w3-theme-light {
+    color: #000 !important;
+    background-color: #e8effa !important
+}
+
+.w3-theme-dark {
+    color: #fff !important;
+    background-color: #03080f !important
+}
+
+.w3-theme-action {
+    color: #fff !important;
+    background-color: #03080f !important
+}
+
+.w3-theme {
+    color: #fff !important;
+    background-color: #07111f !important
+}
+
+.w3-text-theme {
+    color: #07111f !important
+}
+
+.w3-border-theme {
+    border-color: #07111f !important
+}
+
+.w3-hover-theme:hover {
+    color: #fff !important;
+    background-color: #07111f !important
+}
+
+.w3-hover-text-theme:hover {
+    color: #07111f !important
+}
+
+.w3-hover-border-theme:hover {
+    border-color: #07111f !important
+}
+
         code-view:not(:defined) { display: none; }
         :root{
             --q-selector:#82aaff;
@@ -40,42 +137,6 @@
             --hl-entity: #c792ea;
             --hl-text: #e6e6e6;
         }
-
-        .tok-q-selector{color:var(--q-selector)}
-        .tok-q-class{color:var(--q-class)}
-        .tok-q-brace{color:var(--q-brace)}
-        .tok-q-colon{color:var(--q-colon)}
-        .tok-q-semi{color:var(--q-semi)}
-        .tok-q-prop{color:var(--q-prop)}
-        .tok-q-value{color:var(--q-value)}
-        .tok-q-string{color:var(--hl-string)}
-        .tok-q-number{color:var(--q-number)}
-        .tok-q-kw{color:var(--q-kw)}
-        .tok-q-comma{color:var(--q-comma)}
-        .tok-q-comment{color:var(--q-comment);font-style:italic}
-        .tok-q-embedded{color:var(--q-embedded)}
-
-        pre.code-block {
-            background: var(--hl-bg);
-            color: var(--hl-fg);
-            padding: 1rem;
-            border-radius: 12px;
-            overflow: auto;
-            line-height: 1.5;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-            font-size: 13px;
-            font-variant-ligatures: none;
-            tab-size: 4;
-        }
-        .tok-angle   { color: var(--hl-angle); }
-        .tok-tag     { color: var(--hl-tag); }
-        .tok-attr    { color: var(--hl-attr); }
-        .tok-eq      { color: var(--hl-eq); }
-        .tok-string  { color: var(--hl-string); }
-        .tok-comment { color: var(--hl-comment); font-style: italic; }
-        .tok-doctype { color: var(--hl-doctype); }
-        .tok-entity  { color: var(--hl-entity); }
-        .tok-text    { color: var(--hl-text); }
 
         .qhtml-editor {
             border: 1px solid #e5e7eb;
@@ -162,283 +223,17 @@
         }
     </style>
     <script>
-        function escapeHTML(s){
-            return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-                .replaceAll('"','&quot;').replaceAll("'","&#39;");
-        }
-        function renderTokens(tokens, opts){
-            const config = opts || {};
-            const classPrefix = config.classPrefix || 'tok-';
-            let out = '';
-            for(const t of tokens){
-                const cls = t.type ? classPrefix + t.type : classPrefix + 'text';
-                out += '<span class="' + cls + '">' + escapeHTML(t.value) + '</span>';
-            }
-            return out;
-        }
+        const HTML_VOID_TAGS = new Set([
+            'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'
+        ]);
+        const HTML_PRESERVE_TEXT_TAGS = new Set(['pre', 'textarea', 'script', 'style']);
 
-        function tokenizeHTML(input){
-            const len = input.length;
-            let i = 0;
-            const tokens = [];
-            const peek = (n=0)=>input[i+n] || '';
-            const take = (n=1)=>{const s=input.slice(i,i+n); i+=n; return s;};
-            const startsWith = (s)=>input.startsWith(s,i);
-            const push = (type,value)=>tokens.push({type,value});
-            const readWhile = (pred)=>{const s=i; while(i<len && pred(input[i])) i++; return input.slice(s,i);};
-
-            function readEntity(){
-                const s=i;
-                if(peek()!=='&') return null;
-                readWhile(c=>c!==';' && c!=='<' && !/\s/.test(c));
-                if(peek()===';') i++;
-                return {type:'entity',value:input.slice(s,i)};
-            }
-            function readComment(){
-                if(!startsWith('<!--')) return null;
-                const s=i;
-                i+=4;
-                while(i<len && !startsWith('-->')) i++;
-                if(startsWith('-->')) i+=3;
-                return {type:'comment',value:input.slice(s,i)};
-            }
-            function readDoctype(){
-                if(!startsWith('<!')) return null;
-                const s=i;
-                i+=2;
-                while(i<len && peek()!=='>' ) i++;
-                if(peek()==='>') i++;
-                return {type:'doctype',value:input.slice(s,i)};
-            }
-            const isTagNameChar=c=>/[A-Za-z0-9:_-]/.test(c);
-            function readString(){
-                const q=peek();
-                if(q!=='"' && q!=="'") return null;
-                let s=take();
-                while(i<len){
-                    const c=take();
-                    s+=c;
-                    if(c===q) break;
-                    if(c==='<'||c==='>') break;
-                }
-                return {type:'string',value:s};
-            }
-            function readTag(){
-                const cmt=readComment();
-                if(cmt) return cmt;
-                const dec=readDoctype();
-                if(dec) return dec;
-                if(peek()!=='<') return null;
-                const start=i;
-                const local=[];
-                if(startsWith('</')) local.push({type:'angle',value:take(2)}); else local.push({type:'angle',value:take(1)});
-                const name=readWhile(isTagNameChar);
-                if(!name){ i=start; return null; }
-                local.push({type:'tag',value:name});
-                while(i<len){
-                    if(/\s/.test(peek())){ local.push({type:'text',value:readWhile(c=>/\s/.test(c))}); continue; }
-                    if(input.startsWith('/>',i)){ local.push({type:'angle',value:take(2)}); break; }
-                    if(peek()==='>'){ local.push({type:'angle',value:take(1)}); break; }
-                    const attr=readWhile(c=>/[^\s/>=]/.test(c));
-                    if(attr) local.push({type:'attr',value:attr}); else { local.push({type:'text',value:take(1)}); continue; }
-                    if(/\s/.test(peek())) local.push({type:'text',value:readWhile(c=>/\s/.test(c))});
-                    if(peek()==='='){
-                        local.push({type:'eq',value:take(1)});
-                        if(/\s/.test(peek())) local.push({type:'text',value:readWhile(c=>/\s/.test(c))});
-                        const str=readString();
-                        if(str) local.push(str); else {
-                            const v=readWhile(c=>!/[\s>]/.test(c));
-                            if(v) local.push({type:'string',value:v});
-                        }
-                    }
-                }
-                tokens.push(...local);
-                return {type:'__tag_done__',value:''};
-            }
-            while(i<len){
-                const ent=readEntity(); if(ent){ tokens.push(ent); continue; }
-                const before=i; const tag=readTag(); if(tag){ continue; }
-                if(i!==before) continue;
-                const text=readWhile(c=>c!=='<' && c!=='&'); if(text) push('text',text); else push('text',take(1));
-            }
-            return tokens.filter(t=>t.type!=='__tag_done__');
-        }
-
-        function tokenizeQHTML(input){
-            const len = input.length;
-            let i = 0;
-            const T = [];
-
-            const peek=(n=0)=>input[i+n] || '';
-            const take=(n=1)=>{const s=input.slice(i,i+n); i+=n; return s;};
-            const startsWith=(s)=>input.startsWith(s,i);
-            const push=(type,value)=>T.push({type,value});
-
-            const isIdentStart=c=>/[A-Za-z_]/.test(c);
-            const isIdent=c=>/[A-Za-z0-9_\-\.]/.test(c);
-
-            const vendorPrefixes = ['w3-','bs-','uk-','mdc-'];
-            const KW = new Set(['component','slot','html','bsl']);
-
-            const skipWS=(opts={consume:true})=>{
-                let j=i, s='', sawNL=false;
-                while(j<len){
-                    const c=input[j];
-                    if(c===' '||c==='\t'||c==='\r'){ s+=c; j++; continue; }
-                    if(c==='\n'){ s+=c; j++; sawNL=true; continue; }
-                    break;
-                }
-                if(opts.consume){ i=j; if(s) push('q-value', s); }
-                return {text:s, sawNL, end:j};
-            };
-
-            function readComment(){
-                if(startsWith('//')){ const s=i; let j=i+2; while(j<len && input[j]!=='\n') j++; i=j; push('q-comment', input.slice(s,i)); return {kind:'//', end:j}; }
-                if(startsWith('/*')){ const s=i; let j=i+2; while(j+1<len && !(input[j]==='*'&&input[j+1]==='/')) j++; j=Math.min(j+2,len); i=j; push('q-comment', input.slice(s,i)); return {kind:'/*', end:j}; }
-                return null;
-            }
-
-            const readNumber=()=>{ if(!/[0-9]/.test(peek())) return null; const s=i; while(i<len && /[0-9._]/.test(peek())) i++; return input.slice(s,i); };
-            const readString=()=>{ const q=peek(); if(q!=='"'&&q!=="'"&&q!=='`') return null; let s=take(); while(i<len){ const c=take(); s+=c; if(c===q) break; if(c==='\\' && i<len){ s+=take(); } } return s; };
-            const readIdent=()=>{ if(!isIdentStart(peek())) return null; const s=i; i++; while(i<len && isIdent(peek())) i++; return input.slice(s,i); };
-
-            const isVendorClass=(name)=>vendorPrefixes.some(p=>name.startsWith(p));
-            const classifySelector=(name)=> KW.has(name) ? 'q-kw' : isVendorClass(name) ? 'q-class' : 'q-selector';
-
-            function readUntilBraceBalanced(openChar='{', closeChar='}'){
-                let depth=1, out='';
-                while(i<len){
-                    const c=take();
-                    if(c===openChar) depth++; else if(c===closeChar){ depth--; if(depth===0) break; }
-                    out+=c;
-                }
-                return out;
-            }
-
-            function shouldBreakPropValue(){
-                let j=i;
-                while(j<len){
-                    const c=input[j];
-                    if(/\s/.test(c)){ j++; continue; }
-                    if(input[j]==='/' && input[j+1]==='/'){ j+=2; while(j<len && input[j]!=='\n') j++; continue; }
-                    if(input[j]==='/' && input[j+1]==='*'){ j+=2; while(j+1<len && !(input[j]==='*'&&input[j+1]==='/')) j++; if(j+1<len) j+=2; continue; }
-                    break;
-                }
-                if(j>=len) return true;
-                if(input[j]==='}') return true;
-
-                if(/[A-Za-z_]/.test(input[j])){
-                    let k=j+1; while(k<len && /[A-Za-z0-9_\-\.]/.test(input[k])) k++;
-                    let k2=k; while(k2<len && /\s/.test(input[k2])) k2++;
-                    const next=input[k2] || '';
-                    const word=input.slice(j,k);
-                    if(next===':' || next==='{' || (word==='html' && next==='{')) return true;
-                }
-                return false;
-            }
-
-            function parseSelectorList(){
-                while(i<len){
-                    skipWS();
-                    const cm = readComment(); if(cm){ continue; }
-                    if(peek()==='{'){ push('q-brace', take()); return true; }
-                    if(peek()===','){ push('q-comma', take()); continue; }
-                    const id = readIdent();
-                    if(id){ push(classifySelector(id), id); continue; }
-                    if(peek()){ push('q-selector', take()); continue; }
-                }
-                return false;
-            }
-
-            function parseBlock(){
-                while(i<len){
-                    skipWS();
-                    const cm = readComment(); if(cm){ continue; }
-                    if(peek()==='}'){ push('q-brace', take()); return; }
-
-                    const name = readIdent();
-                    if(name){
-                        const ws1 = skipWS({consume:false});
-                        if(name==='html' && input[ws1.end]==='{'){
-                            push('q-kw','html'); skipWS(); push('q-brace', take());
-                            const inner = readUntilBraceBalanced('{','}');
-                            const innerSpans = renderTokens(tokenizeHTML(inner));
-                            T.push({type:'q-embedded', value: innerSpans, __rawHTML:true});
-                            push('q-brace','}');
-                            continue;
-                        }
-
-                        skipWS({consume:false});
-                        if(input[i]===':'){
-                            skipWS();
-                            push('q-prop', name);
-                            push('q-colon', take());
-                            while(i<len){
-                                if(shouldBreakPropValue()) break;
-                                skipWS();
-                                const cmt = readComment(); if(cmt){ continue; }
-                                const str = readString(); if(str){ push('q-string', str); continue; }
-                                const num = readNumber(); if(num){ push('q-number', num); continue; }
-                                const idv = readIdent(); if(idv){ push('q-value', idv); continue; }
-                                if(peek()===';'){ push('q-semi', take()); break; }
-                                if(peek()==='}'){ break; }
-                                if(peek()){ push('q-value', take()); continue; }
-                                break;
-                            }
-                            continue;
-                        } else {
-                            push(classifySelector(name), name);
-                            while(i<len){
-                                skipWS();
-                                const c2 = readComment(); if(c2){ continue; }
-                                if(peek()==='{'){ push('q-brace', take()); parseBlock(); break; }
-                                if(peek()===','){ push('q-comma', take()); continue; }
-                                const id2 = readIdent(); if(id2){ push(classifySelector(id2), id2); continue; }
-                                if(peek()){ push('q-selector', take()); continue; }
-                            }
-                            continue;
-                        }
-                    }
-
-                    if(peek()==='{'){ push('q-brace', take()); parseBlock(); continue; }
-                    if(peek()){ push('q-value', take()); continue; }
-                }
-            }
-
-            while(i<len){
-                skipWS();
-                const cm = readComment(); if(cm){ continue; }
-                if(i>=len) break;
-                if(parseSelectorList()){ parseBlock(); } else break;
-            }
-
-            return T;
-        }
-
-        function highlightHTML(code){ return renderTokens(tokenizeHTML(code)); }
-        function highlightQHTML(code){
-            const tokens = tokenizeQHTML(code);
-            let out = '';
-            for(const t of tokens){
-                if(t.__rawHTML){
-                    out += '<span class="tok-q-embedded">' + t.value + '</span>';
-                } else {
-                    const cls = t.type ? 'tok-' + t.type : 'tok-text';
-                    out += '<span class="' + cls + '">' + escapeHTML(t.value) + '</span>';
-                }
-            }
-            return out;
-        }
-
-        function formatHTML(html) {
+        function formatHTMLFallback(html) {
             if (!html) return '';
-            const voidTags = new Set([
-                'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'
-            ]);
-            const normalized = html.replace(/>\s+</g, '><').trim();
+            const normalized = String(html).replace(/>\s+</g, '><').trim();
             const lines = normalized.replace(/></g, '>\n<').split('\n');
             let indent = 0;
-            const pad = (n)=>'  '.repeat(n);
+            const pad = (n) => '  '.repeat(n);
             const out = [];
             for (let line of lines) {
                 line = line.trim();
@@ -449,85 +244,609 @@
                 const tagNameMatch = isOpening ? line.match(/^<([A-Za-z0-9:_-]+)/) : null;
                 const tagName = tagNameMatch ? tagNameMatch[1].toLowerCase() : '';
 
-                if (isClosing) {
-                    indent = Math.max(0, indent - 1);
-                }
-
+                if (isClosing) indent = Math.max(0, indent - 1);
                 out.push(pad(indent) + line);
-
-                if (isOpening && !isClosing && !isSelfClosing && tagName && !voidTags.has(tagName)) {
+                if (isOpening && !isClosing && !isSelfClosing && tagName && !HTML_VOID_TAGS.has(tagName)) {
                     indent += 1;
                 }
             }
             return out.join('\n');
         }
 
-        // ===== OLD CODE VIEW SYSTEM BEGIN (DO NOT MODIFY) =====
+        function stripQhtmlQuotedSections(line) {
+            let result = '';
+            let quote = '';
+            let escaped = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (quote) {
+                    if (escaped) {
+                        escaped = false;
+                        continue;
+                    }
+                    if (ch === '\\') {
+                        escaped = true;
+                        continue;
+                    }
+                    if (ch === quote) {
+                        quote = '';
+                    }
+                    continue;
+                }
+                if (ch === '"' || ch === '\'' || ch === '`') {
+                    quote = ch;
+                    continue;
+                }
+                result += ch;
+            }
+            return result;
+        }
+
+        function countLeadingIndentChars(line) {
+            let i = 0;
+            while (i < line.length && (line[i] === ' ' || line[i] === '\t')) i += 1;
+            return i;
+        }
+
+        function lineOffsets(lines) {
+            const starts = [];
+            let pos = 0;
+            for (let i = 0; i < lines.length; i++) {
+                starts.push(pos);
+                pos += lines[i].length;
+                if (i < lines.length - 1) pos += 1;
+            }
+            return starts;
+        }
+
+        function lineIndexAtOffset(starts, lines, offset) {
+            let idx = 0;
+            const totalLength = lines.join('\n').length;
+            const clamped = Math.max(0, Math.min(offset, totalLength));
+            while (idx + 1 < starts.length && starts[idx + 1] <= clamped) idx += 1;
+            return idx;
+        }
+
+        function formatQhtmlForEditing(source, cursorStart, cursorEnd, protectRadius) {
+            const raw = String(source || '').replace(/\r\n/g, '\n');
+            if (!raw) {
+                return {
+                    text: '',
+                    cursorStart: 0,
+                    cursorEnd: 0
+                };
+            }
+
+            const lines = raw.split('\n');
+            const oldStarts = lineOffsets(lines);
+            const protect = new Set();
+
+            const safeStart = typeof cursorStart === 'number' ? cursorStart : null;
+            const safeEnd = typeof cursorEnd === 'number' ? cursorEnd : safeStart;
+            const radius = typeof protectRadius === 'number' ? Math.max(0, protectRadius) : 0;
+
+            if (safeStart !== null && safeEnd !== null && lines.length) {
+                const startLine = lineIndexAtOffset(oldStarts, lines, safeStart);
+                const endLine = lineIndexAtOffset(oldStarts, lines, safeEnd);
+                const lo = Math.max(0, Math.min(startLine, endLine) - radius);
+                const hi = Math.min(lines.length - 1, Math.max(startLine, endLine) + radius);
+                for (let i = lo; i <= hi; i++) protect.add(i);
+            }
+
+            const newLines = [];
+            const oldLeading = [];
+            const newLeading = [];
+            let depth = 0;
+
+            for (let idx = 0; idx < lines.length; idx++) {
+                const originalLine = lines[idx];
+                const trimmed = originalLine.trim();
+                const oldLead = countLeadingIndentChars(originalLine);
+                oldLeading[idx] = oldLead;
+
+                if (!trimmed) {
+                    newLines.push('');
+                    newLeading[idx] = 0;
+                    continue;
+                }
+
+                let leadingClosers = 0;
+                while (leadingClosers < trimmed.length && trimmed[leadingClosers] === '}') {
+                    leadingClosers += 1;
+                }
+                const targetDepth = Math.max(0, depth - leadingClosers);
+                const desiredIndent = '  '.repeat(targetDepth);
+
+                const content = originalLine.slice(oldLead);
+                const keepAsTyped = protect.has(idx);
+                const formattedLine = keepAsTyped ? originalLine : (desiredIndent + content);
+
+                newLines.push(formattedLine);
+                newLeading[idx] = keepAsTyped ? oldLead : desiredIndent.length;
+
+                const analysisLine = stripQhtmlQuotedSections(trimmed).replace(/\/\/.*$/, '');
+                const opens = (analysisLine.match(/\{/g) || []).length;
+                const closes = (analysisLine.match(/\}/g) || []).length;
+                depth = Math.max(0, depth + opens - closes);
+            }
+
+            const text = newLines.join('\n');
+            const newStarts = lineOffsets(newLines);
+
+            const mapOffset = (offset) => {
+                if (typeof offset !== 'number') return 0;
+                const oldTotal = raw.length;
+                const clamped = Math.max(0, Math.min(offset, oldTotal));
+                const lineIdx = lineIndexAtOffset(oldStarts, lines, clamped);
+                const oldLineStart = oldStarts[lineIdx];
+                const newLineStart = newStarts[lineIdx];
+                const oldLine = lines[lineIdx] || '';
+                const newLine = newLines[lineIdx] || '';
+                const oldIndent = oldLeading[lineIdx] || 0;
+                const newIndent = newLeading[lineIdx] || 0;
+                const oldColumn = clamped - oldLineStart;
+
+                let newColumn;
+                if (oldColumn <= oldIndent) {
+                    const deltaFromCodeStart = oldColumn - oldIndent;
+                    newColumn = Math.max(0, newIndent + deltaFromCodeStart);
+                } else {
+                    newColumn = oldColumn + (newIndent - oldIndent);
+                }
+
+                newColumn = Math.max(0, Math.min(newColumn, newLine.length));
+                return Math.max(0, Math.min(newLineStart + newColumn, text.length));
+            };
+
+            return {
+                text,
+                cursorStart: mapOffset(safeStart),
+                cursorEnd: mapOffset(safeEnd)
+            };
+        }
+
+        function formatQhtml(source) {
+            return formatQhtmlForEditing(source, null, null, 0).text.trim();
+        }
+
+        function formatHTML(html) {
+            const source = String(html || '').trim();
+            if (!source) return '';
+            if (typeof document === 'undefined') {
+                return formatHTMLFallback(source);
+            }
+
+            try {
+                const template = document.createElement('template');
+                template.innerHTML = source;
+
+                const lines = [];
+                const pad = (n) => '  '.repeat(Math.max(0, n));
+                const pushLine = (depth, text) => {
+                    if (!text) return;
+                    lines.push(pad(depth) + text);
+                };
+
+                const formatAttributes = (element) => {
+                    const attrs = Array.from(element.attributes || []);
+                    if (!attrs.length) return '';
+                    return ' ' + attrs.map((attr) => {
+                        const safeValue = String(attr.value || '').replace(/"/g, '&quot;');
+                        return attr.name + '="' + safeValue + '"';
+                    }).join(' ');
+                };
+
+                const walk = (node, depth, parentTag) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const tag = node.tagName.toLowerCase();
+                        const attrs = formatAttributes(node);
+
+                        if (HTML_VOID_TAGS.has(tag)) {
+                            pushLine(depth, '<' + tag + attrs + '>');
+                            return;
+                        }
+
+                        const allChildren = Array.from(node.childNodes || []);
+                        const children = allChildren.filter((child) => {
+                            if (child.nodeType !== Node.TEXT_NODE) return true;
+                            return !!String(child.nodeValue || '').replace(/\s+/g, ' ').trim();
+                        });
+
+                        if (!children.length) {
+                            pushLine(depth, '<' + tag + attrs + '></' + tag + '>');
+                            return;
+                        }
+
+                        const inlineTextOnly = children.length === 1
+                            && children[0].nodeType === Node.TEXT_NODE
+                            && !HTML_PRESERVE_TEXT_TAGS.has(tag);
+
+                        if (inlineTextOnly) {
+                            const text = String(children[0].nodeValue || '').replace(/\s+/g, ' ').trim();
+                            pushLine(depth, '<' + tag + attrs + '>' + text + '</' + tag + '>');
+                            return;
+                        }
+
+                        pushLine(depth, '<' + tag + attrs + '>');
+                        children.forEach((child) => walk(child, depth + 1, tag));
+                        pushLine(depth, '</' + tag + '>');
+                        return;
+                    }
+
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const rawText = String(node.nodeValue || '');
+                        if (HTML_PRESERVE_TEXT_TAGS.has(parentTag || '')) {
+                            rawText.replace(/\r\n/g, '\n').split('\n').forEach((textLine) => {
+                                if (textLine.length) pushLine(depth, textLine);
+                            });
+                        } else {
+                            const collapsed = rawText.replace(/\s+/g, ' ').trim();
+                            if (collapsed) pushLine(depth, collapsed);
+                        }
+                        return;
+                    }
+
+                    if (node.nodeType === Node.COMMENT_NODE) {
+                        const comment = String(node.nodeValue || '').trim();
+                        if (comment) pushLine(depth, '<!-- ' + comment + ' -->');
+                    }
+                };
+
+                Array.from(template.content.childNodes || []).forEach((node) => walk(node, 0, ''));
+                return lines.join('\n').trim();
+            } catch (err) {
+                return formatHTMLFallback(source);
+            }
+        }
+
+        function escapeHighlightHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderHighlightTokens(tokens) {
+            let out = '';
+            for (const token of tokens) {
+                const className = token.type ? 'tok-' + token.type : 'tok-text';
+                if (token.raw === true) {
+                    out += '<span class="' + className + '">' + token.value + '</span>';
+                } else {
+                    out += '<span class="' + className + '">' + escapeHighlightHtml(token.value) + '</span>';
+                }
+            }
+            return out;
+        }
+
+        function tokenizeHtmlForHighlight(input) {
+            const source = String(input || '');
+            const tokens = [];
+            let index = 0;
+            const len = source.length;
+
+            const push = (type, value) => {
+                if (value) tokens.push({ type, value });
+            };
+
+            while (index < len) {
+                if (source.startsWith('<!--', index)) {
+                    const end = source.indexOf('-->', index + 4);
+                    const stop = end === -1 ? len : end + 3;
+                    push('comment', source.slice(index, stop));
+                    index = stop;
+                    continue;
+                }
+
+                if (source[index] === '<') {
+                    if (source.startsWith('<!', index) && !source.startsWith('<!--', index)) {
+                        const end = source.indexOf('>', index + 2);
+                        const stop = end === -1 ? len : end + 1;
+                        push('doctype', source.slice(index, stop));
+                        index = stop;
+                        continue;
+                    }
+
+                    const isClosing = source.startsWith('</', index);
+                    push('angle', isClosing ? '</' : '<');
+                    index += isClosing ? 2 : 1;
+
+                    const nameMatch = /^[A-Za-z][A-Za-z0-9:_-]*/.exec(source.slice(index));
+                    if (!nameMatch) {
+                        push('text', source[index] || '');
+                        index += 1;
+                        continue;
+                    }
+                    push('tag', nameMatch[0]);
+                    index += nameMatch[0].length;
+
+                    while (index < len) {
+                        if (source.startsWith('/>', index)) {
+                            push('angle', '/>');
+                            index += 2;
+                            break;
+                        }
+                        if (source[index] === '>') {
+                            push('angle', '>');
+                            index += 1;
+                            break;
+                        }
+
+                        const wsMatch = /^[\s]+/.exec(source.slice(index));
+                        if (wsMatch) {
+                            push('text', wsMatch[0]);
+                            index += wsMatch[0].length;
+                            continue;
+                        }
+
+                        const attrMatch = /^[^\s/>=]+/.exec(source.slice(index));
+                        if (!attrMatch) {
+                            push('text', source[index]);
+                            index += 1;
+                            continue;
+                        }
+                        push('attr', attrMatch[0]);
+                        index += attrMatch[0].length;
+
+                        const postNameWs = /^[\s]+/.exec(source.slice(index));
+                        if (postNameWs) {
+                            push('text', postNameWs[0]);
+                            index += postNameWs[0].length;
+                        }
+
+                        if (source[index] === '=') {
+                            push('eq', '=');
+                            index += 1;
+
+                            const postEqWs = /^[\s]+/.exec(source.slice(index));
+                            if (postEqWs) {
+                                push('text', postEqWs[0]);
+                                index += postEqWs[0].length;
+                            }
+
+                            if (source[index] === '"' || source[index] === '\'') {
+                                const quote = source[index];
+                                let end = index + 1;
+                                while (end < len && source[end] !== quote) {
+                                    if (source[end] === '\\' && end + 1 < len) end += 2;
+                                    else end += 1;
+                                }
+                                end = end < len ? end + 1 : len;
+                                push('string', source.slice(index, end));
+                                index = end;
+                            } else {
+                                const unquoted = /^[^\s>]+/.exec(source.slice(index));
+                                if (unquoted) {
+                                    push('string', unquoted[0]);
+                                    index += unquoted[0].length;
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                if (source[index] === '&') {
+                    const semi = source.indexOf(';', index + 1);
+                    if (semi !== -1) {
+                        push('entity', source.slice(index, semi + 1));
+                        index = semi + 1;
+                        continue;
+                    }
+                }
+
+                const nextTag = source.indexOf('<', index);
+                const nextEntity = source.indexOf('&', index);
+                let stop = len;
+                if (nextTag !== -1) stop = Math.min(stop, nextTag);
+                if (nextEntity !== -1) stop = Math.min(stop, nextEntity);
+                if (stop === index) stop += 1;
+                push('text', source.slice(index, stop));
+                index = stop;
+            }
+
+            return tokens;
+        }
+
+        function highlightHtmlCode(input) {
+            return renderHighlightTokens(tokenizeHtmlForHighlight(input));
+        }
+
+        const QHTML_VENDOR_PREFIXES = ['w3-', 'bs-', 'uk-', 'mdc-'];
+        const QHTML_KEYWORDS = new Set(['html', 'component', 'q-component', 'slot', 'into', 'q-import', 'bsl']);
+
+        function tokenizeQhtmlForHighlight(input) {
+            const source = String(input || '');
+            const tokens = [];
+            let index = 0;
+            let depth = 0;
+
+            const push = (type, value, raw) => {
+                if (!value) return;
+                tokens.push({ type, value, raw: raw === true });
+            };
+
+            const readQuoted = (quote) => {
+                const start = index;
+                index += 1;
+                while (index < source.length) {
+                    const ch = source[index];
+                    index += 1;
+                    if (ch === '\\' && index < source.length) {
+                        index += 1;
+                        continue;
+                    }
+                    if (ch === quote) break;
+                }
+                return source.slice(start, index);
+            };
+
+            while (index < source.length) {
+                const ch = source[index];
+
+                if (source.startsWith('//', index)) {
+                    const end = source.indexOf('\n', index + 2);
+                    const stop = end === -1 ? source.length : end;
+                    push('q-comment', source.slice(index, stop));
+                    index = stop;
+                    continue;
+                }
+
+                if (source.startsWith('/*', index)) {
+                    const end = source.indexOf('*/', index + 2);
+                    const stop = end === -1 ? source.length : end + 2;
+                    push('q-comment', source.slice(index, stop));
+                    index = stop;
+                    continue;
+                }
+
+                if (ch === '"' || ch === '\'' || ch === '`') {
+                    push('q-string', readQuoted(ch));
+                    continue;
+                }
+
+                if (/[0-9]/.test(ch)) {
+                    const match = /^[0-9][0-9._]*/.exec(source.slice(index));
+                    if (match) {
+                        push('q-number', match[0]);
+                        index += match[0].length;
+                        continue;
+                    }
+                }
+
+                if (ch === '{' || ch === '}') {
+                    depth += ch === '{' ? 1 : -1;
+                    depth = Math.max(depth, 0);
+                    push('q-brace', ch);
+                    index += 1;
+                    continue;
+                }
+                if (ch === ':') { push('q-colon', ch); index += 1; continue; }
+                if (ch === ';') { push('q-semi', ch); index += 1; continue; }
+                if (ch === ',') { push('q-comma', ch); index += 1; continue; }
+
+                const wsMatch = /^[\s]+/.exec(source.slice(index));
+                if (wsMatch) {
+                    push('q-value', wsMatch[0]);
+                    index += wsMatch[0].length;
+                    continue;
+                }
+
+                const identMatch = /^[A-Za-z_][A-Za-z0-9_.-]*/.exec(source.slice(index));
+                if (identMatch) {
+                    const ident = identMatch[0];
+                    index += ident.length;
+
+                    let lookahead = index;
+                    while (lookahead < source.length && /\s/.test(source[lookahead])) lookahead += 1;
+                    const next = source[lookahead] || '';
+
+                    if (ident === 'html' && next === '{') {
+                        push('q-kw', ident);
+                        if (lookahead > index) {
+                            push('q-value', source.slice(index, lookahead));
+                        }
+                        push('q-brace', '{');
+                        depth += 1;
+                        index = lookahead + 1;
+
+                        const innerStart = index;
+                        let innerDepth = 1;
+                        while (index < source.length && innerDepth > 0) {
+                            if (source[index] === '{') innerDepth += 1;
+                            else if (source[index] === '}') innerDepth -= 1;
+                            index += 1;
+                        }
+                        const innerEnd = innerDepth === 0 ? index - 1 : index;
+                        const innerHtml = source.slice(innerStart, innerEnd);
+                        if (innerHtml) {
+                            push('q-embedded', highlightHtmlCode(innerHtml), true);
+                        }
+                        if (innerDepth === 0) {
+                            push('q-brace', '}');
+                            depth = Math.max(0, depth - 1);
+                        }
+                        continue;
+                    }
+
+                    if (QHTML_KEYWORDS.has(ident)) {
+                        push('q-kw', ident);
+                    } else if (QHTML_VENDOR_PREFIXES.some((prefix) => ident.startsWith(prefix))) {
+                        push('q-class', ident);
+                    } else if (next === ':') {
+                        push('q-prop', ident);
+                    } else if (next === '{' || next === ',') {
+                        push('q-selector', ident);
+                    } else {
+                        push(depth > 0 ? 'q-value' : 'q-selector', ident);
+                    }
+                    continue;
+                }
+
+                push('q-value', ch);
+                index += 1;
+            }
+
+            return tokens;
+        }
+
+        function highlightQhtmlCode(input) {
+            return renderHighlightTokens(tokenizeQhtmlForHighlight(input));
+        }
+
         class CodeView extends HTMLElement {
             constructor() {
                 super();
-                this._tabs = [];
-                this._active = 0;
-                this._htmlIdx = 1;
+                this._tabs = null;
+                this._activeIdx = 0;
                 this._qhtmlIdx = 0;
+                this._htmlIdx = 1;
                 this._qhtmlSource = '';
-                this._previewSelector = '';
+                this._htmlRaw = '';
+                this._htmlOutput = '';
+                this._compiledHtmlRaw = '';
+                this._compiledHtml = '';
+                this._showRenderedHtml = false;
+                this._renderVersion = 0;
+                this._previewSelector = this.getAttribute('data-preview') || '';
                 this._previewTarget = null;
                 this._previewHost = null;
                 this._scratchQhtml = null;
-                this._editorId = Math.random().toString(36).slice(2, 8);
-                this._isRendering = false;
-                this._showRenderedHtml = false;
-                this._htmlRaw = '';
-                this._compiledHtmlRaw = '';
-                this._htmlRenderVersion = 0;
+                this._qhtmlFormatTimer = null;
+                this._isAutoFormattingQhtml = false;
+                this._mounted = false;
+                this.attachShadow({ mode: 'open' });
             }
 
             connectedCallback() {
-                const tabNodes = Array.from(this.querySelectorAll('code-view-tab'));
-                if (tabNodes.length) {
-                    this._tabs = tabNodes.map((el, i) => {
-                        const idx = (el.getAttribute('tab') || i) | 0;
-                        const label = el.getAttribute('label') || (idx === 0 ? 'QHTML' : (idx === 1 ? 'HTML' : 'Tab ' + idx));
-                        const raw = (el.textContent || '').trim();
-                        return { idx, label, raw };
-                    });
-                } else {
-                    this._tabs = [
-                        { idx: 0, label: 'QHTML', raw: '' },
-                        { idx: 1, label: 'HTML', raw: '' }
-                    ];
-                }
+                if (this._mounted) return;
+                this._mounted = true;
 
-                const tabLabel = (t)=>((t.label || '').trim().toLowerCase());
-                this._qhtmlIdx = this._tabs.findIndex(t => tabLabel(t).includes('qhtml'));
-                if (this._qhtmlIdx < 0) this._qhtmlIdx = 0;
-                this._htmlIdx = this._tabs.findIndex(t => tabLabel(t) === 'html');
-                if (this._htmlIdx < 0) {
-                    this._htmlIdx = this._tabs.findIndex(t => tabLabel(t).includes('html') && !tabLabel(t).includes('qhtml'));
-                }
-                if (this._htmlIdx < 0) this._htmlIdx = Math.min(1, this._tabs.length - 1);
-                if (this._htmlIdx === this._qhtmlIdx && this._tabs.length > 1) {
-                    this._htmlIdx = Math.min(1, this._tabs.length - 1);
-                }
-
-                const initial = this._tabs[this._qhtmlIdx] ? this._tabs[this._qhtmlIdx].raw : '';
-                this._previewSelector = this.getAttribute('data-preview') || '';
+                this._tabs = this._readTabs();
+                this._qhtmlIdx = this._findQhtmlTabIndex();
+                this._htmlIdx = this._findHtmlTabIndex();
+                this._activeIdx = this._qhtmlIdx;
                 this._previewTarget = this._previewSelector ? document.querySelector(this._previewSelector) : null;
 
+                const initialSource = this._tabs[this._qhtmlIdx] ? this._tabs[this._qhtmlIdx].raw : '';
                 this.innerHTML = '';
-                this._render();
-                this._setActive(this._qhtmlIdx);
-                this._bind();
-                this.setQhtmlSource(initial);
+                this._renderShell();
+                this._cacheDomNodes();
+                this._bindEvents();
+                this._setActiveTab(this._qhtmlIdx);
+                this.setQhtmlSource(initialSource);
+            }
+
+            disconnectedCallback() {
+                this._mounted = false;
             }
 
             setQhtmlSource(text) {
-                this._qhtmlSource = text || '';
-                if (this._qhtmlSourceArea) {
-                    this._qhtmlSourceArea.value = this._qhtmlSource;
-                }
-                this._renderEditor(this._qhtmlSource);
+                this._qhtmlSource = formatQhtml(text);
+                if (this._qhtmlInput) this._qhtmlInput.value = this._qhtmlSource;
+                this._updateQhtmlHighlight();
                 this._updateOutputs();
             }
 
@@ -535,342 +854,261 @@
                 return this._qhtmlSource;
             }
 
-            _bind() {
-                if (this._qhtmlEditor) {
-                this._qhtmlEditor.addEventListener('input', () => {
-    if (this._isRendering) return;
+            _readTabs() {
+                const tabNodes = Array.from(this.querySelectorAll('code-view-tab'));
+                if (!tabNodes.length) {
+                    const initialQhtml = this.getAttribute('initial-qhtml') || '';
+                    return [
+                        { idx: 0, label: 'QHTML', raw: initialQhtml },
+                        { idx: 1, label: 'HTML', raw: '' }
+                    ];
+                }
 
-    let caret = this._getCaretOffset(this._qhtmlEditor);
+                return tabNodes.map((node, index) => {
+                    const idx = Number.parseInt(node.getAttribute('tab') || String(index), 10) || index;
+                    const label = node.getAttribute('label') || (idx === 0 ? 'QHTML' : (idx === 1 ? 'HTML' : 'Tab ' + idx));
+                    const raw = (node.textContent || '').trim();
+                    return { idx, label, raw };
+                });
+            }
 
-    if (this._pendingCaretDelta) {
-        caret += this._pendingCaretDelta;
-        this._pendingCaretDelta = 0;
-    }
+            _findQhtmlTabIndex() {
+                const match = this._tabs.findIndex((tab) => String(tab.label || '').trim().toLowerCase().includes('qhtml'));
+                return match >= 0 ? match : 0;
+            }
 
-    this._qhtmlSource = this._readEditorText();
-    if (this._qhtmlSourceArea) {
-        this._qhtmlSourceArea.value = this._qhtmlSource;
-    }
-
-    this._renderEditor(this._qhtmlSource, caret);
-    this._updateOutputs();
-});
-
-                    this._qhtmlEditor.addEventListener('keydown', (event) => {
-                        if (event.key === 'Tab') {
-                            event.preventDefault();
-                            document.execCommand('insertText', false, '  ');
-                            return;
-                        }
-                        if (event.key === 'Enter') {
-                            event.preventDefault();
-							 this._pendingCaretDelta = 1;   // ← ADD THIS
-                            document.execCommand('insertLineBreak');
-                        }
-                    });
-                    this._qhtmlEditor.addEventListener('paste', (event) => {
-                        event.preventDefault();
-                        const text = (event.clipboardData || window.clipboardData).getData('text');
-                        document.execCommand('insertText', false, text);
+            _findHtmlTabIndex() {
+                const normalize = (tab) => String(tab.label || '').trim().toLowerCase();
+                let match = this._tabs.findIndex((tab) => normalize(tab) === 'html');
+                if (match < 0) {
+                    match = this._tabs.findIndex((tab) => {
+                        const label = normalize(tab);
+                        return label.includes('html') && !label.includes('qhtml');
                     });
                 }
+                if (match < 0) match = Math.min(1, this._tabs.length - 1);
+                if (match === this._qhtmlIdx && this._tabs.length > 1) match = this._qhtmlIdx === 0 ? 1 : 0;
+                return match;
+            }
+
+            _renderShell() {
+                const tabButtons = this._tabs.map((tab, index) => {
+                    return '<button class="cv-tab" type="button" role="tab" data-idx="' + index + '" aria-selected="false">' + tab.label + '</button>';
+                }).join('');
+
+                const panelMarkup = this._tabs.map((tab, index) => {
+                    const isQhtml = index === this._qhtmlIdx;
+                    const isHtml = index === this._htmlIdx;
+                    if (isQhtml) {
+                        return (
+                            '<section class="cv-panel" role="tabpanel" data-idx="' + index + '" aria-hidden="true">' +
+                                '<button class="cv-copy" type="button" data-idx="' + index + '" title="Copy source">Copy</button>' +
+                                '<div class="cv-editor-wrap">' +
+                                    '<pre class="cv-qhtml-highlight" aria-hidden="true"></pre>' +
+                                    '<textarea class="cv-qhtml-input" spellcheck="false"></textarea>' +
+                                '</div>' +
+                            '</section>'
+                        );
+                    }
+                    if (isHtml) {
+                        return (
+                            '<section class="cv-panel" role="tabpanel" data-idx="' + index + '" aria-hidden="true">' +
+                                '<button class="cv-copy" type="button" data-idx="' + index + '" title="Copy HTML">Copy</button>' +
+                                '<pre class="cv-html-output"></pre>' +
+                            '</section>'
+                        );
+                    }
+                    return (
+                        '<section class="cv-panel" role="tabpanel" data-idx="' + index + '" aria-hidden="true">' +
+                            '<button class="cv-copy" type="button" data-idx="' + index + '" title="Copy tab">Copy</button>' +
+                            '<pre class="cv-static-output" data-static-idx="' + index + '"></pre>' +
+                        '</section>'
+                    );
+                }).join('');
+
+                this.shadowRoot.innerHTML =
+                    '<style>' +
+                        ':host { display:block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }' +
+                        '.cv { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background: #fff; }' +
+                        '.cv-tabs { display:flex; align-items:center; gap:2px; background:#f8fafc; padding:6px; flex-wrap:wrap; }' +
+                        '.cv-tab { appearance:none; border:0; background:transparent; padding:.5rem .75rem; border-radius:8px; cursor:pointer; font-weight:300; color:#475569; }' +
+                        '.cv-tab[aria-selected="true"] { background:#fff; box-shadow: 0 1px 0 #e5e7eb inset, 0 -1px 0 #fff inset; color:#111827; }' +
+                        '.cv-toggle { margin-left:auto; display:none; align-items:center; gap:.4rem; font-size:.75rem; color:#334155; }' +
+                        '.cv-toggle input { accent-color:#2563eb; }' +
+                        '.cv-body { background: var(--hl-bg); color: var(--hl-fg); }' +
+                        '.cv-panel { position:relative; display:none; }' +
+                        '.cv-panel[data-active="true"] { display:block; }' +
+                        '.cv-copy { position:absolute; top:.6rem; right:.6rem; font-size:.675rem; background:#111827; color:#fff; border:0; border-radius:8px; padding:.35rem .6rem; cursor:pointer; z-index:2; }' +
+                        '.cv-editor-wrap { position:relative; min-height:10rem; }' +
+                        '.cv-qhtml-highlight, .cv-qhtml-input, .cv-html-output, .cv-static-output { box-sizing:border-box; width:100%; min-height:10rem; margin:0; padding:1rem; border:0; font:inherit; font-size:13px; line-height:1.5; font-variant-ligatures:none; tab-size:4; overflow:auto; white-space:pre; }' +
+                        '.cv-qhtml-highlight { background: var(--hl-bg); color: var(--hl-fg); pointer-events:none; }' +
+                        '.cv-qhtml-input { position:absolute; inset:0; background:transparent; color:transparent; caret-color:var(--hl-fg); resize:vertical; outline:none; }' +
+                        '.cv-qhtml-input::selection { background: rgba(255,255,255,0.25); }' +
+                        '.cv-html-output, .cv-static-output { background: var(--hl-bg); color: var(--hl-fg); white-space:pre; }' +
+                        '.tok-q-selector{color:var(--q-selector)} .tok-q-class{color:var(--q-class)} .tok-q-brace{color:var(--q-brace)} .tok-q-colon{color:var(--q-colon)} .tok-q-semi{color:var(--q-semi)} .tok-q-prop{color:var(--q-prop)} .tok-q-value{color:var(--q-value)} .tok-q-string{color:var(--hl-string)} .tok-q-number{color:var(--q-number)} .tok-q-kw{color:var(--q-kw)} .tok-q-comma{color:var(--q-comma)} .tok-q-comment{color:var(--q-comment);font-style:italic} .tok-q-embedded{color:var(--q-embedded)}' +
+                        '.tok-angle{color:var(--hl-angle)} .tok-tag{color:var(--hl-tag)} .tok-attr{color:var(--hl-attr)} .tok-eq{color:var(--hl-eq)} .tok-string{color:var(--hl-string)} .tok-comment{color:var(--hl-comment);font-style:italic} .tok-doctype{color:var(--hl-doctype)} .tok-entity{color:var(--hl-entity)} .tok-text{color:var(--hl-text)}' +
+                    '</style>' +
+                    '<div class="cv" part="container">' +
+                        '<div class="cv-tabs" role="tablist" aria-label="Code tabs">' +
+                            tabButtons +
+                            '<label class="cv-toggle">' +
+                                '<input class="cv-toggle-input" type="checkbox">' +
+                                '<span>Rendered HTML</span>' +
+                            '</label>' +
+                        '</div>' +
+                        '<div class="cv-body">' + panelMarkup + '</div>' +
+                    '</div>';
+            }
+
+            _cacheDomNodes() {
+                const root = this.shadowRoot;
+                this._tabButtons = Array.from(root.querySelectorAll('.cv-tab'));
+                this._panels = Array.from(root.querySelectorAll('.cv-panel'));
+                this._copyButtons = Array.from(root.querySelectorAll('.cv-copy'));
+                this._qhtmlInput = root.querySelector('.cv-qhtml-input');
+                this._qhtmlHighlight = root.querySelector('.cv-qhtml-highlight');
+                this._htmlOutputNode = root.querySelector('.cv-html-output');
+                this._htmlToggle = root.querySelector('.cv-toggle');
+                this._htmlToggleInput = root.querySelector('.cv-toggle-input');
+
+                root.querySelectorAll('.cv-static-output').forEach((node) => {
+                    const idx = Number.parseInt(node.getAttribute('data-static-idx'), 10);
+                    const tab = this._tabs[idx];
+                    if (tab) node.textContent = tab.raw || '';
+                });
+            }
+
+            _bindEvents() {
+                if (this._qhtmlInput) {
+                    this._qhtmlInput.addEventListener('input', () => {
+                        if (this._isAutoFormattingQhtml) return;
+                        this._qhtmlSource = this._qhtmlInput.value || '';
+                        this._updateQhtmlHighlight();
+                        this._updateOutputs();
+                        this._scheduleQhtmlAutoFormat();
+                    });
+                    this._qhtmlInput.addEventListener('scroll', () => {
+                        this._syncQhtmlScroll();
+                    });
+                    this._qhtmlInput.addEventListener('blur', () => {
+                        this._applyQhtmlAutoFormat();
+                    });
+                }
+
                 if (this._htmlToggleInput) {
                     this._htmlToggleInput.addEventListener('change', () => {
                         this._showRenderedHtml = !!this._htmlToggleInput.checked;
                         this._updateHtmlTab();
                     });
                 }
-                this.querySelectorAll('.cv-tab').forEach(btn => {
-                    btn.addEventListener('click', () => this._setActive(+btn.dataset.idx));
+
+                this._tabButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const idx = Number.parseInt(button.getAttribute('data-idx'), 10) || 0;
+                        this._setActiveTab(idx);
+                    });
                 });
-                this.querySelectorAll('.cv-copy').forEach(btn => {
-                    btn.addEventListener('click', async () => {
-                        const i = +btn.dataset.idx;
-                        let text = '';
-                        if (i === this._qhtmlIdx) {
-                            text = this._qhtmlSource;
-                        } else if (i === this._htmlIdx) {
-                            text = this._showRenderedHtml ? (this._compiledHtml || '') : (this._htmlOutput || '');
-                        } else {
-                            text = this._htmlOutput || '';
-                        }
-                        try {
-                            await navigator.clipboard.writeText(text);
-                            btn.textContent = 'Copied';
-                            setTimeout(()=>btn.textContent='Copy',1200);
-                        } catch {
-                            btn.textContent = 'Copy failed';
-                            setTimeout(()=>btn.textContent='Copy',1200);
-                        }
+
+                this._copyButtons.forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        const idx = Number.parseInt(button.getAttribute('data-idx'), 10) || 0;
+                        await this._copyTab(idx, button);
                     });
                 });
             }
 
-            _render() {
-                const tabsHtml = this._tabs.map((t, i) =>
-                    '<button class="cv-tab" role="tab" aria-selected="' + (i===0) + '" data-idx="' + i + '">' + t.label + '</button>'
-                ).join('');
-                const toggleHtml =
-                    '<label class="cv-toggle" data-role="html-toggle">' +
-                        '<input class="cv-toggle-input" type="checkbox">' +
-                        '<span>Rendered HTML</span>' +
-                    '</label>';
-
-                const panelsHtml = this._tabs.map((t, i) => {
-                    if (i === this._qhtmlIdx) {
-                        return (
-                            '<div class="cv-panel" role="tabpanel" aria-hidden="' + (i!==0) + '" data-idx="' + i + '" style="' + (i!==0?'display:none;':'') + '">' +
-                                '<button class="cv-copy" data-idx="' + i + '" title="Copy code">Copy</button>' +
-                                '<div class="cv-edit-wrap">' +
-                                    '<div class="cv-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"></div>' +
-                                    '<textarea class="cv-source" aria-hidden="true" tabindex="-1"></textarea>' +
-                                '</div>' +
-                            '</div>'
-                        );
-                    }
-                    return (
-                        '<div class="cv-panel cv-html" role="tabpanel" aria-hidden="' + (i!==0) + '" data-idx="' + i + '" style="' + (i!==0?'display:none;':'') + '">' +
-                            '<button class="cv-copy" data-idx="' + i + '" title="Copy code">Copy</button>' +
-                            '<pre class="code-block"><code class="language-html"></code></pre>' +
-                        '</div>'
-                    );
-                }).join('');
-
-                this.innerHTML = '' +
-                    '<style>' +
-                        ':host { display:block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }' +
-                        '.cv { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background:#fff; }' +
-                        '.cv-tabs { display:flex; align-items:center; gap:2px; background:#f8fafc; padding:6px; flex-wrap:wrap; }' +
-                        '.cv-tab { appearance:none; border:0; background:transparent; padding:.5rem .75rem; border-radius:8px; cursor:pointer; font-weight:300; color:#475569; }' +
-                        '.cv-tab[aria-selected="true"] { background:#fff; box-shadow: 0 1px 0 #e5e7eb inset, 0 -1px 0 #fff inset; color:#111827; }' +
-                        '.cv-body { position:relative; }' +
-                        '.cv-copy { position:absolute; top:.5rem; right:.5rem; font-size:.675rem; background:#111827; color:#fff; border:0; border-radius:8px; padding:.35rem .6rem; cursor:pointer; z-index:3; }' +
-                        '.cv-panel { position:relative; }' +
-                        '.cv-edit-wrap { position:relative; }' +
-                        '.cv-editor { background: var(--hl-bg); color: var(--hl-fg); padding:1rem; border-radius:12px; min-height:10rem; overflow:auto; font:inherit; line-height:1.5; white-space:pre-wrap; font-variant-ligatures:none; tab-size:4; outline:none; }' +
-                        '.cv-editor::selection, .cv-editor span::selection { background: rgba(255,255,255,0.25); }' +
-                        '.cv-source { position:absolute; inset:0; opacity:0; pointer-events:none; height:1px; width:1px; }' +
-                        '.cv-panel pre { margin:0; min-height:10rem; }' +
-                        '.cv-html pre { white-space: pre-wrap; word-break: break-word; }' +
-                        '.cv-toggle { margin-left:auto; display:none; align-items:center; gap:.4rem; font-size:.75rem; color:#334155; }' +
-                        '.cv-toggle input { accent-color:#2563eb; }' +
-                    '</style>' +
-                    '<div class="cv" part="container">' +
-                        '<div class="cv-tabs" role="tablist" aria-label="Code tabs">' + tabsHtml + toggleHtml + '</div>' +
-                        '<div class="cv-body">' + panelsHtml + '</div>' +
-                    '</div>';
-
-                this._qhtmlEditor = this.querySelector('.cv-editor');
-                this._qhtmlSourceArea = this.querySelector('.cv-source');
-                this._htmlCode = this.querySelector('.cv-html code');
-                this._htmlToggle = this.querySelector('.cv-toggle');
-                this._htmlToggleInput = this.querySelector('.cv-toggle-input');
-            }
-
-            _setActive(i) {
-                this._active = i;
-                this.querySelectorAll('.cv-tab').forEach((t, idx) =>
-                    t.setAttribute('aria-selected', String(idx === i))
-                );
-                this.querySelectorAll('.cv-panel').forEach((p, idx) => {
-                    p.style.display = (idx === i) ? '' : 'none';
-                    p.setAttribute('aria-hidden', String(idx !== i));
+            _setActiveTab(index) {
+                this._activeIdx = index;
+                this._tabButtons.forEach((button, idx) => {
+                    button.setAttribute('aria-selected', idx === index ? 'true' : 'false');
+                });
+                this._panels.forEach((panel, idx) => {
+                    const active = idx === index;
+                    panel.setAttribute('data-active', active ? 'true' : 'false');
+                    panel.setAttribute('aria-hidden', active ? 'false' : 'true');
                 });
                 if (this._htmlToggle) {
-                    this._htmlToggle.style.display = (i === this._htmlIdx) ? 'flex' : 'none';
+                    this._htmlToggle.style.display = index === this._htmlIdx ? 'flex' : 'none';
                 }
+            }
+
+            async _copyTab(index, button) {
+                let text = '';
+                if (index === this._qhtmlIdx) {
+                    text = this._qhtmlSource;
+                } else if (index === this._htmlIdx) {
+                    text = this._showRenderedHtml ? (this._compiledHtml || this._htmlOutput || '') : (this._htmlOutput || '');
+                } else if (this._tabs[index]) {
+                    text = this._tabs[index].raw || '';
+                }
+
+                try {
+                    await navigator.clipboard.writeText(text);
+                    button.textContent = 'Copied';
+                } catch (err) {
+                    button.textContent = 'Copy failed';
+                }
+                setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+            }
+
+            _updateQhtmlHighlight() {
+                if (!this._qhtmlHighlight) return;
+                this._qhtmlHighlight.innerHTML = highlightQhtmlCode(this._qhtmlSource || '');
+                this._syncQhtmlScroll();
+            }
+
+            _syncQhtmlScroll() {
+                if (!this._qhtmlInput || !this._qhtmlHighlight) return;
+                this._qhtmlHighlight.scrollTop = this._qhtmlInput.scrollTop;
+                this._qhtmlHighlight.scrollLeft = this._qhtmlInput.scrollLeft;
+            }
+
+            _scheduleQhtmlAutoFormat() {
+                if (this._qhtmlFormatTimer) clearTimeout(this._qhtmlFormatTimer);
+                this._qhtmlFormatTimer = setTimeout(() => this._applyQhtmlAutoFormat(), 350);
+            }
+
+            _applyQhtmlAutoFormat() {
+                if (!this._qhtmlInput) return;
+                const current = this._qhtmlInput.value || '';
+                const start = this._qhtmlInput.selectionStart;
+                const end = this._qhtmlInput.selectionEnd;
+                const result = formatQhtmlForEditing(current, start, end, 1);
+                const formatted = result.text;
+                if (!formatted || formatted === current) return;
+
+                this._isAutoFormattingQhtml = true;
+                this._qhtmlSource = formatted;
+                this._qhtmlInput.value = formatted;
+                this._updateQhtmlHighlight();
+                this._updateOutputs();
+                this._qhtmlInput.selectionStart = Math.min(result.cursorStart, formatted.length);
+                this._qhtmlInput.selectionEnd = Math.min(result.cursorEnd, formatted.length);
+                this._isAutoFormattingQhtml = false;
             }
 
             async _updateOutputs() {
                 const source = this._qhtmlSource || '';
-                const renderVersion = ++this._htmlRenderVersion;
-                let raw = '';
+                const renderVersion = ++this._renderVersion;
+                let htmlRaw = '';
                 try {
-                    raw = await this._renderHtmlFromQhtml(source);
+                    htmlRaw = await renderHtmlFromQhtml(source, this._scratchQhtml);
                 } catch (err) {
-                    console.warn('QHTML parse failed:', err);
+                    console.warn('code-view render failed:', err);
                 }
-                if (renderVersion !== this._htmlRenderVersion) {
-                    return;
-                }
-                this._htmlRaw = raw || '';
+
+                if (renderVersion !== this._renderVersion) return;
+
+                this._htmlRaw = htmlRaw || '';
                 this._htmlOutput = formatHTML(this._htmlRaw);
                 this._updateHtmlTab();
                 this._updatePreview(source);
             }
 
             _updateHtmlTab() {
-                if (!this._htmlCode) return;
-                const showCompiled = !!this._showRenderedHtml;
-                const text = showCompiled ? (this._compiledHtml || this._htmlOutput) : this._htmlOutput;
-                this._htmlCode.innerHTML = highlightHTML(text || '');
-            }
-
-            _renderEditor(text, caretOffset) {
-                if (!this._qhtmlEditor) return;
-                this._isRendering = true;
-                this._qhtmlEditor.innerHTML = this._buildEditorHtml(text);
-                if (typeof caretOffset === 'number') {
-                    const limit = (typeof this._qhtmlLength === 'number') ? this._qhtmlLength : caretOffset;
-                    const safeOffset = Math.max(0, Math.min(caretOffset, limit));
-                    this._setCaretOffset(this._qhtmlEditor, safeOffset);
-                }
-                this._isRendering = false;
-            }
-
-            _buildEditorHtml(text) {
-                const tokens = tokenizeQHTML(text);
-                let idx = 0;
-                let out = '';
-                for (const token of tokens) {
-                    let value = token.value || '';
-                    if (token.__rawHTML) {
-                        const tmp = document.createElement('div');
-                        tmp.innerHTML = value;
-                        value = tmp.textContent || '';
-                    }
-                    const cls = token.type ? 'tok-' + token.type : 'tok-text';
-                    for (const ch of value) {
-                     if (ch === '\n') {
-    out += '<br data-idx="' + idx + '">';
-    out += '<span class="cv-eol" data-idx="' + (idx + 1) + '">&#8203;</span>';
-    idx += 2;
-    continue;
-}
-
-                        out += '<span id="cvch-' + this._editorId + '-' + idx + '" data-idx="' + idx + '" class="' + cls + '">' + escapeHTML(ch) + '</span>';
-                        idx++;
-                    }
-                }
-                if (!out || text.endsWith('\n')) {
-                    out += '<span class="tok-text cv-empty" data-empty="1"></span>';
-                }
-                this._qhtmlLength = idx;
-                return out;
-            }
-
-            _readEditorText() {
-                if (!this._qhtmlEditor) return '';
-                const walker = document.createTreeWalker(
-                    this._qhtmlEditor,
-                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-                    {
-                        acceptNode(node) {
-                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
-							
-                            return NodeFilter.FILTER_SKIP;
-                        }
-                    }
-                );
-                let out = '';
-                let node;
-                while ((node = walker.nextNode())) {
-					
-                    if (node.nodeType === Node.TEXT_NODE) {
-						    if (node.nodeValue === '\u200B') continue;
-
-                        out += node.nodeValue;
-                    } else if (node.tagName === 'BR') {
-                        out += '\n';
-                    }
-                }
-                return out;
-            }
-
-            _getCaretOffset(container) {
-                const sel = window.getSelection();
-                if (!sel || sel.rangeCount === 0) return 0;
-                const range = sel.getRangeAt(0);
-                if (!container.contains(range.startContainer)) return 0;
-                const subtreeLength = (node) => {
-                    if (!node) return 0;
-                      return node.nodeValue === '\u200B' ? 0 : node.nodeValue.length;
-                    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return 1;
-                    let total = 0;
-                    node.childNodes.forEach(child => { total += subtreeLength(child); });
-                    return total;
-                };
-                const walker = document.createTreeWalker(
-                    container,
-                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-                    {
-                        acceptNode(node) {
-                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
-                            return NodeFilter.FILTER_SKIP;
-                        }
-                    }
-                );
-                let offset = 0;
-                let node;
-                while ((node = walker.nextNode())) {
-                    if (node === range.startContainer) {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            return offset + range.startOffset;
-                        }
-                        return offset;
-                    }
-                    offset += node.nodeType === Node.TEXT_NODE ? node.nodeValue.length : 1;
-                }
-                if (range.startContainer.nodeType === Node.ELEMENT_NODE) {
-    const parent = range.startContainer;
-    for (let i = 0; i < range.startOffset; i++) {
-        const n = parent.childNodes[i];
-        if (!n) continue;
-
-        if (n.nodeType === Node.TEXT_NODE) {
-            offset += n.nodeValue.length;
-        } else if (n.nodeType === Node.ELEMENT_NODE && n.tagName === 'BR') {
-            offset += 1;
-        } else {
-            offset += subtreeLength(n);
-        }
-    }
-    return offset;
-}
-			}
-
-            _setCaretOffset(container, offset) {
-                const sel = window.getSelection();
-                if (!sel) return;
-                const range = document.createRange();
-                let remaining = offset;
-                const walker = document.createTreeWalker(
-                    container,
-                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-                    {
-                        acceptNode(node) {
-                            if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-                            if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return NodeFilter.FILTER_ACCEPT;
-                            return NodeFilter.FILTER_SKIP;
-                        }
-                    }
-                );
-                let node;
-                while ((node = walker.nextNode())) {
-                    const len = node.nodeType === Node.TEXT_NODE ? node.nodeValue.length : 1;
-                    if (remaining <= len) {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            range.setStart(node, remaining);
-                        } else {
-                            range.setStartAfter(node);
-                        }
-                        range.collapse(true);
-                        sel.removeAllRanges();
-                        sel.addRange(range);
-                        return;
-                    }
-                    remaining -= len;
-                }
-                range.selectNodeContents(container);
-                range.collapse(false);
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }
-
-            async _renderHtmlFromQhtml(source) {
-                return renderHtmlFromQhtml(source, this._scratchQhtml);
+                if (!this._htmlOutputNode) return;
+                const text = this._showRenderedHtml ? (this._compiledHtml || this._htmlOutput || '') : (this._htmlOutput || '');
+                this._htmlOutputNode.innerHTML = highlightHtmlCode(text);
             }
 
             _updatePreview(source) {
@@ -878,22 +1116,23 @@
                     this._previewTarget = document.querySelector(this._previewSelector);
                 }
                 if (!this._previewTarget) return;
+
                 if (!this._previewHost || !this._previewTarget.contains(this._previewHost)) {
                     this._previewTarget.innerHTML = '';
                     this._previewHost = document.createElement('q-html');
                     this._previewTarget.appendChild(this._previewHost);
                 }
+
                 this._previewHost.innerHTML = source;
-                if (typeof this._previewHost.render === 'function') {
-                    this._previewHost.render();
-                }
+                if (typeof this._previewHost.render === 'function') this._previewHost.render();
                 this._refreshCompiledHtml();
             }
 
             _refreshCompiledHtml() {
                 if (!this._previewHost) return;
-                const schedule = (window.requestAnimationFrame || function(cb){ setTimeout(cb, 0); });
+                const schedule = window.requestAnimationFrame || function(cb) { setTimeout(cb, 0); };
                 schedule(() => {
+                    if (!this._previewHost) return;
                     const raw = this._previewHost.innerHTML || '';
                     this._compiledHtmlRaw = raw;
                     this._compiledHtml = formatHTML(raw);
@@ -902,8 +1141,7 @@
             }
         }
 
-        customElements.define('code-view', CodeView);
-        // ===== OLD CODE VIEW SYSTEM END (DO NOT MODIFY) =====
+        if (!customElements.get('code-view')) customElements.define('code-view', CodeView);
 
         function buildQhtmlStreamLanguage(StreamLanguage) {
             const vendorPrefixes = ['w3-','bs-','uk-','mdc-'];
@@ -1136,6 +1374,8 @@
 
             const qhtmlLanguage = StreamLanguage ? buildQhtmlStreamLanguage(StreamLanguage) : null;
 
+            const normalizedInitialText = formatQhtml(initialText || '');
+
             const state = {
                 qhtmlView: null,
                 htmlView: null,
@@ -1144,7 +1384,9 @@
                 htmlRaw: '',
                 compiledHtml: '',
                 showRendered: false,
-                renderVersion: 0
+                renderVersion: 0,
+                qhtmlFormatTimer: null,
+                isAutoFormattingQhtml: false
             };
 
             const updateHtmlView = () => {
@@ -1196,10 +1438,49 @@
                 ? baseSetup.filter(Boolean)
                 : (baseSetup ? [baseSetup] : []);
             const tabKeymap = keymap && indentWithTab ? keymap.of([indentWithTab]) : null;
+            const scheduleQhtmlAutoFormat = () => {
+                if (state.qhtmlFormatTimer) clearTimeout(state.qhtmlFormatTimer);
+                state.qhtmlFormatTimer = setTimeout(() => {
+                    if (!state.qhtmlView) return;
+                    const current = state.qhtmlView.state.doc.toString();
+                    const selection = state.qhtmlView.state.selection.main;
+                    const result = formatQhtmlForEditing(current, selection.anchor, selection.head, 1);
+                    const formatted = result.text;
+                    if (!formatted || formatted === current) return;
+                    const anchor = Math.min(result.cursorStart, formatted.length);
+                    const head = Math.min(result.cursorEnd, formatted.length);
+
+                    state.isAutoFormattingQhtml = true;
+                    setCodeMirrorText(state.qhtmlView, formatted);
+                    state.qhtmlView.dispatch({ selection: { anchor, head } });
+                    state.isAutoFormattingQhtml = false;
+                }, 350);
+            };
+
+            const applyQhtmlAutoFormat = () => {
+                if (!state.qhtmlView) return;
+                const current = state.qhtmlView.state.doc.toString();
+                const selection = state.qhtmlView.state.selection.main;
+                const result = formatQhtmlForEditing(current, selection.anchor, selection.head, 1);
+                const formatted = result.text;
+                if (!formatted || formatted === current) return;
+                const anchor = Math.min(result.cursorStart, formatted.length);
+                const head = Math.min(result.cursorEnd, formatted.length);
+
+                state.isAutoFormattingQhtml = true;
+                setCodeMirrorText(state.qhtmlView, formatted);
+                state.qhtmlView.dispatch({ selection: { anchor, head } });
+                state.isAutoFormattingQhtml = false;
+            };
+
             const updateListener = EditorView.updateListener
                 ? EditorView.updateListener.of((update) => {
                     if (update.docChanged) {
-                        updateOutputs(update.state.doc.toString());
+                        const source = update.state.doc.toString();
+                        updateOutputs(source);
+                        if (!state.isAutoFormattingQhtml) {
+                            scheduleQhtmlAutoFormat();
+                        }
                     }
                 })
                 : null;
@@ -1220,7 +1501,6 @@
             const nonEditable = EditorView.editable ? EditorView.editable.of(false) : null;
             const htmlExtensions = []
                 .concat(baseExtensions, [
-                    lineWrapping,
                     baseTheme,
                     htmlLanguage,
                     htmlHighlight,
@@ -1231,11 +1511,17 @@
 
             state.qhtmlView = new EditorView({
                 state: EditorState.create({
-                    doc: initialText || '',
+                    doc: normalizedInitialText,
                     extensions: qhtmlExtensions
                 }),
                 parent: editorHost
             });
+
+            if (state.qhtmlView && state.qhtmlView.dom) {
+                state.qhtmlView.dom.addEventListener('blur', () => {
+                    applyQhtmlAutoFormat();
+                }, true);
+            }
 
             state.htmlView = new EditorView({
                 state: EditorState.create({
@@ -1274,14 +1560,14 @@
             }
 
             setActiveTab('qhtml');
-            updateOutputs(initialText || '');
+            updateOutputs(normalizedInitialText);
 
             return state;
         }
     </script>
 
 </head>
-<body>
+<body class="w3-theme">
     <!-- Sample usage of the q-html component to make the whole page -->
 
  <q-html>
@@ -1293,67 +1579,10 @@
                       html { "This is a playground for testing qhtml" }
                	  }
 		p { html { "Enter your qHTML Code below" } }
-		div {
-			id: "qhtmlEditorCard"
-			class: "qhtml-editor w3-card"
-			div {
-				class: "qhtml-tabs"
-				role: "tablist"
-				aria-label: "QHTML editor tabs"
-				button {
-					class: "qhtml-tab"
-					role: "tab"
-					aria-selected: "true"
-					data-tab: "qhtml"
-					html { "QHTML" }
-				}
-				button {
-					class: "qhtml-tab"
-					role: "tab"
-					aria-selected: "false"
-					data-tab: "html"
-					html { "HTML" }
-				}
-				label {
-					class: "qhtml-toggle"
-					input { id: "qhtmlRenderedToggle" type: "checkbox" }
-					span { html { "Fully Rendered HTML" } }
-				}
-			}
-			div {
-				class: "qhtml-panels"
-				div {
-					class: "qhtml-panel"
-					data-panel: "qhtml"
-					data-active: "true"
-					role: "tabpanel"
-					aria-hidden: "false"
-					div { id: "qhtmlEditor" }
-				}
-				div {
-					class: "qhtml-panel qhtml-html-view"
-					data-panel: "html"
-					data-active: "false"
-					role: "tabpanel"
-					aria-hidden: "true"
-					div { id: "qhtmlHtmlView" }
-				}
-			}
+		q-editor {
+			id: "playgroundEditor"
+			class: "w3-card w3-theme-d2"
 		}
-		br { }
-
-		w3-large, w3-h3 {
-				div {
-					html { "Preview" }
-				}
-			}
-		w3-card { 
-			w3-wide {
-				div {
-					id: "qhtmlPreview"
-				}
-			}
-		 }
 	          
 	  }
 	div { 
@@ -1539,7 +1768,12 @@ w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
 
 // end of demo playground code
 
-	initCodeMirrorDemo(demoSource.trim())
+	const editor = document.getElementById("playgroundEditor")
+	if (editor && typeof editor.setQhtmlSource === "function") {
+		editor.setQhtmlSource(demoSource.trim())
+	} else if (editor) {
+		editor.textContent = demoSource.trim()
+	}
 })
 
 

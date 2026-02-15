@@ -1,0 +1,98 @@
+q-component q-w3css-modal {
+  div.w3-modal {
+      div.w3-modal-content.w3-card-4.w3-animate-zoom {
+        style {  max-width: 70vw; }
+        div.w3-center {
+          br {}
+          span.w3-button.w3-xlarge.w3-hover-red.w3-display-topright {
+            onclick { this.parentElement.parentElement.parentElement.style.display='none'; }
+            title: "Close Modal";
+            html { &times; }
+          }
+
+          slot { title }
+        }
+        div.w3-container {
+          slot { main }
+
+        }
+        slot { footer }
+      }
+    }
+}
+
+q-component q-tab-navbar {
+  nav {
+    div.nav.nav-tabs.mb-3 {
+      id: "nav-tab";
+      role: "tablist";
+      slot { tab-buttons }
+    }
+  }
+}
+
+q-component q-tab-navbutton {
+  button.nav-link {
+    data-bs-toggle: "tab";
+    type: "button";
+    role: "tab";
+    aria-selected: "false";
+    tabindex: "-1";
+    tab-pane: "";
+    onclick {
+      const rawPane = (this.getAttribute('tab-pane') || '').trim();
+      const paneId = rawPane.replace(/^#/, '');
+      if (!paneId) return;
+      const targetSelector = '#' + paneId;
+
+      this.setAttribute('data-bs-target', targetSelector);
+      this.setAttribute('aria-controls', paneId);
+      this.id = paneId + '-tab';
+
+      const tabList = this.parentElement;
+      if (tabList) {
+        tabList.querySelectorAll('.nav-link').forEach((button) => {
+          button.classList.remove('active');
+          button.setAttribute('aria-selected', 'false');
+          button.setAttribute('tabindex', '-1');
+        });
+      }
+
+      this.classList.add('active');
+      this.setAttribute('aria-selected', 'true');
+      this.removeAttribute('tabindex');
+
+      let scope = tabList ? tabList.parentElement : this.parentElement;
+      while (scope && !scope.querySelector('.tab-content')) {
+        scope = scope.parentElement;
+      }
+
+      const paneRoot = (scope && scope.querySelector('.tab-content')) || document;
+      paneRoot.querySelectorAll('.tab-pane').forEach((pane) => {
+        pane.classList.remove('active');
+        pane.classList.remove('show');
+      });
+
+      const targetPane = paneRoot.querySelector(targetSelector) || document.querySelector(targetSelector);
+      if (targetPane) {
+        targetPane.classList.add('active');
+        targetPane.classList.add('show');
+        targetPane.setAttribute('aria-labelledby', this.id);
+      }
+    }
+    slot { tab-label }
+  }
+}
+
+q-component q-tab-content {
+  div.tab-content {
+    id: "nav-tabContent";
+    slot { panes }
+  }
+}
+
+q-component q-tab-widget {
+  div.bd-example.m-0.border-0 {
+    slot { main }
+  }
+}
