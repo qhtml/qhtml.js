@@ -665,6 +665,10 @@
       this._isAutoFormattingQhtml = false;
       this._scripts = SCRIPT_OPTIONS_DEFAULT.map((item) => Object.assign({}, item));
       this._mounted = false;
+      this._startupRenderSynced = false;
+      this._awaitingQhtmlDefinition = false;
+      this._deferredOutputQueued = false;
+      this._startupRenderListener = null;
     }
 
     connectedCallback() {
@@ -682,6 +686,7 @@
       this._bindEvents();
       this._setActiveTab('qhtml');
       this.setQhtmlSource(initialSource);
+      this._ensureStartupRenderPass();
     }
 
     disconnectedCallback() {
@@ -690,6 +695,13 @@
         clearTimeout(this._qhtmlFormatTimer);
         this._qhtmlFormatTimer = null;
       }
+      if (this._startupRenderListener) {
+        document.removeEventListener('QHTMLContentLoaded', this._startupRenderListener);
+        this._startupRenderListener = null;
+      }
+      this._startupRenderSynced = false;
+      this._awaitingQhtmlDefinition = false;
+      this._deferredOutputQueued = false;
     }
 
     setQhtmlSource(text) {
@@ -701,6 +713,57 @@
 
     getQhtmlSource() {
       return this._qhtmlSource;
+    }
+
+    _scheduleOutputRetry() {
+      if (!this.isConnected) return;
+
+      const schedule = (cb) => {
+        if (typeof globalScope.requestAnimationFrame === 'function') {
+          globalScope.requestAnimationFrame(cb);
+          return;
+        }
+        setTimeout(cb, 0);
+      };
+
+      if (!customElements.get('q-html')) {
+        if (this._awaitingQhtmlDefinition || typeof customElements.whenDefined !== 'function') return;
+        this._awaitingQhtmlDefinition = true;
+        customElements.whenDefined('q-html')
+          .then(() => {
+            this._awaitingQhtmlDefinition = false;
+            if (!this.isConnected) return;
+            this._scratchQhtml = document.createElement('q-html');
+            this._updateOutputs();
+          })
+          .catch(() => {
+            this._awaitingQhtmlDefinition = false;
+          });
+        return;
+      }
+
+      if (this._deferredOutputQueued) return;
+      this._deferredOutputQueued = true;
+      schedule(() => {
+        this._deferredOutputQueued = false;
+        if (!this.isConnected) return;
+        this._scratchQhtml = document.createElement('q-html');
+        this._updateOutputs();
+      });
+    }
+
+    _ensureStartupRenderPass() {
+      if (this._startupRenderSynced) return;
+      this._startupRenderSynced = true;
+      this._scheduleOutputRetry();
+
+      if (typeof document !== 'undefined' && !this._startupRenderListener) {
+        this._startupRenderListener = () => {
+          this._startupRenderListener = null;
+          this._scheduleOutputRetry();
+        };
+        document.addEventListener('QHTMLContentLoaded', this._startupRenderListener, { once: true });
+      }
     }
 
     _renderShell() {
@@ -1043,6 +1106,8 @@
       this._previewHost.innerHTML = this._composeQhtmlSourceWithImports(source);
       if (typeof this._previewHost.render === 'function') {
         this._previewHost.render();
+      } else {
+        this._scheduleOutputRetry();
       }
     }
 
