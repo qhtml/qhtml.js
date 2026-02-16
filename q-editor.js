@@ -709,6 +709,7 @@
       if (this._qhtmlInput) this._qhtmlInput.value = this._qhtmlSource;
       this._updateQhtmlHighlight();
       this._updateOutputs();
+      this._scheduleOutputRetry();
     }
 
     getQhtmlSource() {
@@ -1001,6 +1002,9 @@
         panel.setAttribute('data-active', active ? 'true' : 'false');
         panel.setAttribute('aria-hidden', active ? 'false' : 'true');
       });
+      if (name === 'preview' || name === 'html') {
+        this._scheduleOutputRetry();
+      }
     }
 
     _scheduleQhtmlAutoFormat() {
