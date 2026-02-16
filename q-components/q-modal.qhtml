@@ -1,0 +1,92 @@
+q-template q-container-theme-dark {
+  div.w3-container.w3-theme-d2.w3-padding-large {
+    slot { slot-container-contents }
+  }
+}
+
+q-template q-container-theme-none {
+  div.w3-container.w3-padding-large {
+    slot { slot-container-contents }
+  }
+}
+
+q-template q-container-theme-light {
+  div.w3-container.w3-light-grey.w3-padding-large.w3-border-top {
+    slot { slot-container-contents }
+  }
+}
+
+/* usage:
+* q-modal {
+*   header { text { modal header goes here } }
+*   body { text { heres the modal body } }
+*   footer { text { optional footer content } }
+* }
+*/
+q-template q-modal {
+  q-modal-component {
+    q-modal-instance {
+      modal-header-slot {
+        q-container-theme-dark {
+          slot { header }
+        }
+      }
+
+      modal-body-slot {
+        q-container-theme-none {
+          slot { body }
+        }
+      }
+
+      modal-footer-slot {
+        q-local-modal-footer-wrapper {
+          slot { footer }
+        }
+      }
+    }
+  }
+}
+
+q-template q-local-modal-footer-wrapper {
+  div.w3-container.w3-light-grey.w3-padding-large.w3-border-top {
+    div.w3-label {
+      slot { modal-footer }
+    }
+    div.w3-center,button.w3-btn.w3-theme-l1 {
+      style { max-width: 40vw; }
+      text { close }
+      onclick { this.parentElement.closest("q-modal-component").hide(); }
+    }
+  }
+}
+
+q-template q-modal-instance {
+  div.w3-modal {
+    style {
+      display: block;
+    }
+
+    div.w3-modal-content.w3-card-4.w3-animate-top {
+      style {
+        max-width: 70vw
+      }
+
+      slot { modal-header-slot }
+      slot { modal-body-slot }
+      slot { modal-footer-slot }
+    }
+  }
+}
+
+/* controller for hide() and show() functions */
+q-component q-modal-component {
+  function show() {
+    this.style.display = "block"
+  }
+
+  function hide() {
+    this.style.display = "none"
+  }
+
+  slot { modal-instance-slot }
+}
