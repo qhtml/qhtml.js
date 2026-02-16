@@ -1113,10 +1113,10 @@
     }
 
     _syncPreviewDependencies() {
-      if (!this._previewNode) return;
+    /*  if (!this._previewNode) return;
       const deps = this._resolveEnabledDependencyAssets();
 
-      Array.from(this._previewNode.querySelectorAll('link[data-qe-preview-dependency="true"]')).forEach((node) => node.remove());
+     Array.from(this._previewNode.querySelectorAll('link[data-qe-preview-dependency="true"]')).forEach((node) => node.remove());
       deps.styles.forEach((href) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
@@ -1130,7 +1130,8 @@
       });
 
       deps.scripts.forEach((src) => this._ensurePreviewScript(src));
-    }
+      */
+    } 
 
     _buildExportText(includeScripts) {
       const lines = [];
