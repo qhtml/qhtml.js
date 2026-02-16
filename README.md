@@ -9,8 +9,15 @@ This README is written for builders who want a quick, reliable way to author UI 
 - Write HTML structure with a clean, readable block syntax.
 - Use standard HTML attributes and event handlers.
 - Inline HTML or plain text blocks where needed.
-- Build reusable components with slots.
+- Build reusable runtime components with slots and methods.
+- Build compile-time templates that render to pure HTML.
 - Optional add-ons: `w3-tags.js` and `bs-tags.js` for shorthand UI markup.
+
+## v4.6 changes
+
+- Added deprecation warnings in `qhtml.js` for legacy compatibility syntaxes planned for removal in v5.0.
+- Added `q-components.qhtml` bundle guidance, including modular `q-components/q-modal.qhtml` usage.
+- Updated docs for current `q-component` vs `q-template` behavior and selection guidance.
 
 ## Quick Start
 
@@ -58,7 +65,7 @@ QHTML:
 </q-html>
 ```
 
-HTML:
+HTML output:
 
 ```html
 <div>
@@ -70,6 +77,8 @@ HTML:
 ### Attributes
 
 Attributes use `name: "value"` inside a block.
+
+> Note: Legacy text-property syntax such as `div { text: "some text" }` is deprecated and will be removed in v5.0. Use `text { some text }`.
 
 QHTML:
 
@@ -83,10 +92,18 @@ QHTML:
 </q-html>
 ```
 
-HTML:
+Runtime host output:
 
 ```html
 <a href="https://example.com" class="link">Visit Example</a>
+```
+
+Legacy/deprecated example (still accepted for compatibility, but scheduled for removal in v5.0):
+
+```qhtml
+div {
+  text: "some text";
+}
 ```
 
 ### Text and HTML and Style blocks
@@ -139,24 +156,7 @@ HTML:
 <p><center><a href="https://example.com">Visit Example</a></center></p>
 ```
 
-## Events and page initialization
-
-### QHTMLContentLoaded
-
-`qhtml.js` triggers a `QHTMLContentLoaded` event when it finishes converting QHTML into HTML. If you need to run logic that touches rendered elements (for example, attach listeners or read dimensions), do it inside this event.
-
-```html
-<script>
-  document.addEventListener("QHTMLContentLoaded", function () {
-    const button = document.querySelector("#saveButton");
-    if (button) {
-      button.addEventListener("click", function () {
-        console.log("Button ready and wired");
-      });
-    }
-  });
-</script>
-```
+## Events and lifecycle
 
 ### Inline event handlers
 
@@ -234,89 +234,144 @@ Top-level host example:
 </q-html>
 ```
 
-## Components and slots (q-component)
+## Components and templates (`q-component` vs `q-template`)
 
-`q-component` lets you create reusable UI blocks with named slots.
+QHTML has two reusable-block modes:
 
-You can define a component name directly after `q-component`:
+- `q-component`: runtime custom-element host for functional behavior
+- `q-template`: compile-time template that renders to pure HTML
 
-```qhtml
-q-component card-panel {
-  div {
-    class: "card"
-    slot { name: "content" }
-  }
-}
-```
+### `q-component`: runtime host with methods and slot carriers
 
-This is equivalent to:
+`q-component` remains a custom element in output (for valid hyphenated names), so instance methods and direct host queries work.
+
+> Note: Legacy anonymous component syntax like `q-component { id: "my-component" ... }` is deprecated and will be removed in v5.0. Use `q-component my-component { ... }`.
 
 ```qhtml
-q-component {
-  id: "card-panel"
-  div {
-    class: "card"
-    slot { name: "content" }
-  }
-}
-```
+q-component nav-bar {
+  function notify() { alert("hello") }
 
-QHTML:
-
-```qhtml
-q-component {
-  id: "text-bar"
-  div {
-    class: "w3-bar w3-blue"
-    span {
-      slot { name: "left" }
-    }
-    slot { name: "right" }
+  div.nav-shell {
+    h3 { slot { title } }
+    div.links { slot { items } }
   }
 }
 
-div {
-  text-bar {
-    div {
-      slot: "left"
-      text { Left content }
-    }
-    div {
-      slot: "right"
-      text { Right content }
+nav-bar {
+  id: "main-nav"
+
+  title {
+    text { Main Navigation }
+  }
+
+  items {
+    ul {
+      li { text { Home } }
+      li { text { Contact } }
     }
   }
 }
 ```
 
-HTML:
+Runtime host shape:
 
 ```html
-<div class="w3-bar w3-blue">
-  <span>
-    <div slot="left">Left content</div>
-  </span>
-  <div slot="right">Right content</div>
+<nav-bar id="main-nav" q-component="nav-bar" qhtml-component-instance="1">
+  <q-into slot="title">...</q-into>
+  <q-into slot="items">...</q-into>
+</nav-bar>
+```
+
+Behavior:
+
+- Top-level component `function` blocks become instance methods.
+- Invocation attributes stay on the host (`id`, `class`, `data-*`, ARIA, etc.).
+- Slot payload is normalized to `q-into` carriers.
+- Single-slot rule: if the component defines exactly one slot, unslotted children are auto-wrapped into one `q-into` targeting that slot.
+
+Single-slot normalization example:
+
+```qhtml
+q-component hello-box {
+  div.frame { slot { main } }
+}
+
+hello-box {
+  id: "box1"
+  text { hello }
+}
+```
+
+Runtime carrier output:
+
+```html
+<hello-box id="box1" q-component="hello-box" qhtml-component-instance="1">
+  <q-into slot="main">hello</q-into>
+</hello-box>
+```
+
+Runtime component methods and helper APIs are documented in the `JavaScript API` section at the end of this README.
+
+### `q-template`: compile-time pure HTML (non-traceable output)
+
+`q-template` composes slot content like a component, but compiles away to plain HTML.
+
+```qhtml
+q-template card-shell {
+  function ignoredAtCompileTime() {
+    console.log("ignored")
+  }
+
+  div.card {
+    h4 { slot { heading } }
+    div.body { slot { body } }
+  }
+}
+
+card-shell {
+  heading { text { Profile } }
+  body { p { text { This is pure HTML output } } }
+}
+```
+
+Rendered HTML:
+
+```html
+<div class="card">
+  <h4>Profile</h4>
+  <div class="body">
+    <p>This is pure HTML output</p>
+  </div>
 </div>
 ```
+
+Behavior:
+
+- `function` blocks in `q-template` are ignored and produce a warning.
+- No slot/component trace markers are preserved from template expansion.
+- Expansion is one-way; resulting HTML is not reverse-mapped back to template slot/component sources.
+- If nested `q-component` instances are inside a template expansion, those instances still remain runtime custom-element hosts.
+
+### Choosing between them
+
+- Use `q-component` when you need runtime behavior (`function` methods, direct instance control, host-level state).
+- Use `q-template` for structure-only composition that should compile down to pure HTML output.
+- Default to `q-template` for reusable layout shells, then add `q-component` only where runtime behavior is required.
 
 ## Into blocks (slot projection)
 
 The `into {}` block lets you project content into a named slot without attaching
 `slot: "name"` to every child. It is a structural block (not an attribute), and
-`slot` is required. `into` targets only `slot { name: "..." }` placeholders and
-never injects directly into components.
+`slot` is required. `into` targets only slot placeholders and never injects directly into components.
 
 ### Single-slot injection
 
 QHTML:
 
 ```qhtml
-q-component {
-  id: "label-pill"
-  span {
-    class: "pill"
-    slot { name: "label" }
+q-component label-pill {
+  span.pill {
+    slot { label }
   }
 }
 
@@ -331,7 +386,9 @@ label-pill {
 HTML:
 
 ```html
-<span class="pill">New</span>
+<label-pill q-component="label-pill" qhtml-component-instance="1">
+  <q-into slot="label">New</q-into>
+</label-pill>
 ```
 
 ### Nested projection through another component
@@ -341,24 +398,22 @@ This example wraps content across two components by targeting a single slot.
 QHTML:
 
 ```qhtml
-q-component {
-  id: "outer-frame"
+q-component outer-frame {
   div {
     class: "outer"
     inner-box {
       into {
         slot: "inner"
-        slot { name: "content" }
+        slot { content }
       }
     }
   }
 }
 
-q-component {
-  id: "inner-box"
+q-component inner-box {
   div {
     class: "inner"
-    slot { name: "inner" }
+    slot { inner }
   }
 }
 
@@ -370,14 +425,14 @@ outer-frame {
 }
 ```
 
-HTML:
+Runtime host output:
 
 ```html
-<div class="outer">
-  <div class="inner">
+<outer-frame q-component="outer-frame" qhtml-component-instance="1">
+  <q-into slot="content">
     <p>Wrapped twice</p>
-  </div>
-</div>
+  </q-into>
+</outer-frame>
 ```
 
 ## Shorthand syntax
@@ -406,22 +461,31 @@ HTML:
 
 Slot blocks accept shorthand forms:
 
+> Note: Legacy slot naming syntax `slot { name: "my-slot" }` is deprecated and will be removed in v5.0. Use `slot { my-slot }`.
+
 ```qhtml
 q-component my-component {
-  slot { id: "my-slot1" }
-  slot { name: "my-slot2" }
+  slot { my-slot1 }
+  slot { my-slot2 }
   slot { my-slot3 }
 }
 ```
 
-This is equivalent to:
+Legacy/deprecated slot naming form (v5.0 removal):
 
 ```qhtml
-q-component {
-  id: "my-component"
-  slot { name: "my-slot1" }
-  slot { name: "my-slot2" }
-  slot { name: "my-slot3" }
+slot { name: "my-slot" }
+```
+
+### Legacy inline slot-property syntax (deprecated)
+
+> Note: Legacy inline slot property syntax such as `q-component my-component { div { slot: "my-slot" } }` is deprecated and will be removed in v5.0.
+
+Preferred modern approach:
+
+```qhtml
+q-component my-component {
+  div { slot { my-slot } }
 }
 ```
 
@@ -431,7 +495,7 @@ When a component defines slots, you can inject by naming a slot block directly i
 
 ```qhtml
 q-component my-component {
-  slot { name: "my-slot" }
+  slot { my-slot }
 }
 
 my-component {
@@ -441,7 +505,7 @@ my-component {
 }
 ```
 
-This is equivalent to:
+Same result can be written with an explicit `into` block:
 
 ```qhtml
 my-component {
@@ -460,6 +524,10 @@ Rules:
 
 - The import path inside `{}` must be raw text (not quoted).
 - Imports are resolved before component/slot/text transformations.
+- Initial rendering uses a blocking import-first phase:
+  - Phase 1: preload/resolve all `q-import` trees for discovered `<q-html>` hosts.
+  - Phase 2: run preprocessing, component expansion, and final render.
+- If a `render()` call happens while the document is still loading, it waits for the initial import barrier.
 - Imports are recursive.
 - Recursive expansion is capped at 100 imports per render pass.
 - Imported source is cached by URL, so repeated imports do not re-fetch the same file.
@@ -495,6 +563,49 @@ Recursive example:
 ```
 
 `home.qhtml` can itself contain more `q-import { ... }` blocks. The engine keeps expanding recursively until no imports remain or the 100-import safety cap is reached.
+
+## `q-components.qhtml` bundle
+
+`q-components.qhtml` is the component-bundle entrypoint. Instead of keeping all component definitions in one large file, it imports grouped files (currently `q-components/q-modal.qhtml`).
+
+Use it like this:
+
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+  ...
+</q-html>
+```
+
+### `q-modal` usage (from `q-components/q-modal.qhtml`)
+
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+
+  q-modal {
+    id: "modal1"
+    header { h3 { text { Modal Header } } }
+    body { p { text { Modal body content } } }
+    footer { p { text { Optional footer note } } }
+  }
+
+  button {
+    text { Open modal }
+    onClick { document.querySelector("#modal1 > q-modal-component").show(); }
+  }
+
+  button {
+    text { Hide modal }
+    onClick { document.querySelector("#modal1 > q-modal-component").hide(); }
+  }
+</q-html>
+```
+
+Notes:
+
+- The controller methods (`show()`, `hide()`) are exposed on the nested `q-modal-component` node.
+- `header`, `body`, and `footer` are projected into the modal template through the bundle wrappers.
 
 ## `tools/qhtml-tools.js` conversion helpers
 
@@ -640,114 +751,54 @@ HTML (result):
 - `text {}` inserts plain text. Use it when you do not want HTML parsing.
 - `html {}` injects raw HTML directly.
 - `on* {}` blocks convert to inline event attributes.
-- If you need to run startup logic, hook `QHTMLContentLoaded`.
+- If you need to run startup logic, hook `QHTMLContentLoaded` (see `JavaScript API` at the end).
 
 ## Demo
 
 Open `demo.html` to see a full playground with QHTML, HTML, and live preview side by side.
 Also check out <a href="https://datafault.net/">datafault.net</a> for more information and examples on using qhtml.js.
 
+## JavaScript API
 
-## 📊 Project Metrics Summary
+### `QHTMLContentLoaded`
 
-### 🗓 Timeline
-- **Spec timeline:** **Unavailable**
-  - `spec_memory.created_at` is empty in all rows  
-  - **0 / 113** timestamps populated
+`qhtml.js` dispatches `QHTMLContentLoaded` after parsing/rendering finishes for a `<q-html>` tree. Use this event for setup code that needs final DOM nodes.
 
----
+```html
+<script>
+  document.addEventListener("QHTMLContentLoaded", function () {
+    const button = document.querySelector("#saveButton");
+    if (button) {
+      button.addEventListener("click", function () {
+        console.log("Button ready and wired");
+      });
+    }
+  });
+</script>
+```
 
-### 📝 Specification Activity
-- **Total spec entries:** **113**
+### Runtime APIs on `q-component` instances
 
-**Spec focus areas (root path scope):**
-- into — **34**
-- demo — **20**
-- q-import — **19**
-- slot — **16**
-- syntax — **13**
-- component — **7**
+Instances created from `q-component` expose:
 
----
+- Methods declared with `function ... { ... }` in the component definition
+- `instance.slots()`
+- `instance.into(slotId, payload)`
 
-### 📋 Requirements & Governance
-- **Requirements (total):** **42**
-  - Closed — **42**
-  - Approved — **0**
-  - Superseded — **0**
+```js
+document.addEventListener("QHTMLContentLoaded", function () {
+  const nav = document.querySelector("#main-nav");
+  if (!nav) return;
 
-- **Decisions + Constraints (total):** **37**
-  - Decisions — **3**
-  - Constraints — **34**
+  console.log(nav.slots());
+  nav.into("title", "<strong>Updated title</strong>");
+  nav.notify();
+});
+```
 
----
+### `q-template` runtime behavior
 
-### ❓ Question Handling
-- **Total questions:** **25**
-  - Closed — **25**
-  - Approved — **0**
-  - Open — **0**
+`q-template` does not expose runtime methods. It is compile-time only and expands to plain HTML.
 
-- **Completion gate health:**  
-  - Open questions — **0**  
-  - Open requirement/decision/constraint rows — **0**
-
----
-
-### 🚀 Delivery & Change Management
-- **Total changes shipped:** **5**
-- **Completion rate:** **5 / 5 (100%)**
-
----
-
-### 📚 Definition Catalog
-- **Total definitions:** **155**
-- **Files covered:** **14**
-- **Average definitions per file:** **11.07**
-
-**Definition type mix:**
-- function — **147**
-- class — **3**
-- const — **3**
-- method — **2**
-
----
-
-### 🔗 Change Impact & Coverage (Definition-Level)
-- **change_defs links:** **0**
-- **Average defs per change:** **0.00**
-- **Unique defs touched:** **0 (0.00%)**
-- **Tracking coverage (definition-level):** **0 / 5 (0.00%)**
-
-**Most frequently touched definition:**  
-- **Unavailable** (change_defs table is empty)
-
----
-
-### 📁 Change Impact (File-Level)
-- **Tracking coverage (file-level):** **5 / 5 (100%)**
-- **Files touched:** **7**
-- **Total file-touch links:** **10**
-- **Hotspot concentration:** Top 3 files account for **60.00%** of all file touches
-
-**Top touched files:**
-- `qhtml.js` — **4**
-- `README.md` — **1**
-- `codemirror/codemirror-src.js` — **1**
-- `codemirror/codemirror.js` — **1**
-- `package-lock.json` — **1**
-- `package.json` — **1**
-- `rollup.config.js` — **1**
-
----
-
-### 📡 Process Signals
-- **refs table rows:** **0**  
-  _(Reference graph not populated)_
-- **todo table rows:** **0**
-
----
-
-### 📈 Catalog Concentration
-- **Top 2 files by definition count:** `qhtml.js`, `wheel.sh`
-- **Definition concentration:** **72.90%** of all defs reside in these two files
+- `function` blocks inside `q-template` are ignored (with warning).
+- Use `q-component` when you need callable methods (`.show()`, `.hide()`, custom actions, etc.).
