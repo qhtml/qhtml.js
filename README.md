@@ -802,3 +802,148 @@ document.addEventListener("QHTMLContentLoaded", function () {
 
 - `function` blocks inside `q-template` are ignored (with warning).
 - Use `q-component` when you need callable methods (`.show()`, `.hide()`, custom actions, etc.).
+
+# Project Stats
+# 📊 Project Metrics Summary  
+_Source: `WHEEL.db` via `./wheel.sh`_
+
+---
+
+## 🗓 Timeline
+
+- **spec_memory.created_at missing:** **152 / 152 (100%)**
+- Time-based metrics (first/last timestamp, active days, per-day throughput) — **Not computable**
+- **Sequence span:** Spec IDs **1 → 152**
+
+---
+
+## 📝 Specification Activity
+
+- **Total spec entries:** **152**
+
+### Status Distribution
+- closed — **90 (59.21%)**
+- approved — **39 (25.66%)**
+- superseded — **23 (15.13%)**
+
+### Focus Areas (Top Path Prefixes)
+- into — **34 (22.37%)**
+- q_components — **33 (21.71%)**
+- demo — **20 (13.16%)**
+- q-import — **19 (12.50%)**
+- slot — **16 (10.53%)**
+
+### Recent Focus (Last 20 Spec IDs)
+- q_components — **18**
+- release — **2**
+
+---
+
+## 📋 Requirements & Governance
+
+### Requirements
+- **Total:** **51**
+  - closed — **36 (70.59%)**
+  - approved — **9 (17.65%)**
+  - superseded — **6 (11.76%)**
+
+### Decisions + Constraints
+- **Total:** **43**
+  - Decisions — **7**
+  - Constraints — **36**
+
+**Combined status split:**
+- approved — **6**
+- closed — **31**
+- superseded — **6**
+
+---
+
+## ❓ Question Handling
+
+- **Total questions:** **25**
+  - closed — **17 (68.00%)**
+  - superseded — **8 (32.00%)**
+  - open — **0**
+
+### Completion Gate Health
+- Open questions — **0**
+- Open req/decision/constraint rows — **0**
+
+---
+
+## 🚀 Delivery & Change Management
+
+- **Total changes:** **14**
+- **Completed:** **14 / 14 (100%)**
+
+### Ratios & Coverage
+- **Spec-to-change ratio:** **10.86 spec rows per change**
+- Changes with any tracking (`change_files` or `change_defs`) — **9 / 14 (64.29%)**
+- Changes with `change_defs` entries — **4 / 14 (28.57%)**
+
+---
+
+## 📚 Definition Catalog
+
+- **Total definitions:** **257**
+- **Files cataloged:** **18**
+- **Files with definitions:** **9**
+- **Average defs per file (with defs):** **28.56**
+
+### Definition Type Mix
+- function — **236**
+- component — **7**
+- const — **6**
+- class — **4**
+- method — **3**
+- property — **1**
+
+### Top Files by Definition Count
+- `qhtml.js` — **116**
+- `wheel.sh` — **55**
+- `q-editor.js` — **28**
+- `demo.html` — **25**
+- `wheel-scan.sh` — **16**
+
+---
+
+## 🔗 Change Impact & Coverage
+
+- **Total change_defs rows:** **57**
+  - With `def_id` — **54**
+  - Without `def_id` — **3**
+
+### Impact Density
+- Avg defs per change (all changes) — **4.07**
+- Avg defs per tracked change (`change_defs` only) — **14.25**
+
+### Coverage
+- Unique definitions edited — **48**
+- Coverage of all defs — **18.68% (48 / 257)**
+
+### Files Touched
+- Via `change_defs` — **4**
+- Via `change_files` — **9**
+
+---
+
+## 🔥 Hotspots & Concentration
+
+### Top Edited Files (by definition-touch count)
+- `qhtml.js` — **30**
+- `q-editor.js` — **22**
+- `demo.html` — **3**
+- `README.md` — **2**
+
+- **Top 3 files account for:** **96.49%** of all def touches (**55 / 57**)
+
+### Most Frequently Edited Definition
+- `transformComponentDefinitionsHelper(input)` in `qhtml.js` — **3 touches**
+
+---
+
+## 📡 Process Signals
+
+- `refs` rows — **0**
+- `todo` rows — **0**
