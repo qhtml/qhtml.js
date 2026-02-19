@@ -165,13 +165,13 @@ You can use the standard attribute form:
 ```qhtml
 <q-html>
   button {
-    onclick: "alert('Hello')"
+    onclick { "alert('Hello')" }
     text { Click me }
   }
 </q-html>
 ```
 
-And you can also use the new `on*` block syntax for cleaner event bodies with support for multiple lines and other complex javascript:
+all  onEvents that work in HTML work in QHTML
 
 QHTML:
 
@@ -252,19 +252,22 @@ q-component nav-bar {
   function notify() { alert("hello") }
 
   div.nav-shell {
-    h3 { slot { title } }
-    div.links { slot { items } }
+    h3 {
+      slot { title } /* create title slot to import content into component */
+    }
+    div.links {
+       slot { items } /* create slot named "items" */
+    }
   }
 }
 
 nav-bar {
   id: "main-nav"
-
-  title {
-    text { Main Navigation }
+  title {      /* slot target */
+    text { Main Navigation } /* content  to import */
   }
 
-  items {
+  items { /* target slot "items" */
     ul {
       li { text { Home } }
       li { text { Contact } }
@@ -310,6 +313,11 @@ Runtime carrier output:
 </hello-box>
 ```
 
+is shown on the browser as:
+```html
+<div class="frame">hello</div>
+```
+
 Runtime component methods and helper APIs are documented in the `JavaScript API` section at the end of this README.
 
 ### `q-template`: compile-time pure HTML (non-traceable output)
@@ -318,10 +326,7 @@ Runtime component methods and helper APIs are documented in the `JavaScript API`
 
 ```qhtml
 q-template card-shell {
-  function ignoredAtCompileTime() {
-    console.log("ignored")
-  }
-
+  
   div.card {
     h4 { slot { heading } }
     div.body { slot { body } }
@@ -358,11 +363,15 @@ Behavior:
 - Use `q-template` for structure-only composition that should compile down to pure HTML output.
 - Default to `q-template` for reusable layout shells, then add `q-component` only where runtime behavior is required.
 
-## Into blocks (slot projection)
+## Slots
 
-The `into {}` block lets you project content into a named slot without attaching
-`slot: "name"` to every child. It is a structural block (not an attribute), and
-`slot` is required. `into` targets only slot placeholders and never injects directly into components.
+Both q-component and q-template support slots, only q-component slots are accessible via the javascript API and remain as 
+custom HTML elements, so the `q-component nav-bar`  will remain as `<nav-bar>`.  Be cautious with the names of slots, if you
+happen to name a slot as the same name as a q-component or q-template, chances are you will lose one of the references 
+depending on the order that you define them in. 
+
+Note that if you want customized parts to any q-component or q-template outside of whats defined in the q-component or  q-template 
+definition, you must use a slot to include that content. 
 
 ### Single-slot injection
 
@@ -376,10 +385,7 @@ q-component label-pill {
 }
 
 label-pill {
-  into {
-    slot: "label"
-    text { New }
-  }
+   text { New }  /* automatically imports into the label slot */
 }
 ```
 
@@ -393,34 +399,36 @@ HTML:
 
 ### Nested projection through another component
 
-This example wraps content across two components by targeting a single slot.
+This example wraps content across two components by targeting a single slot. It shows how the slots can be nested at any level since they always will be added
+to the q-component definition even if they are nested 10 levels deep they will be accessible at the top level.
 
 QHTML:
 
 ```qhtml
-q-component outer-frame {
+
+q-component inner-component {
   div {
-    class: "outer"
-    inner-box {
-      into {
-        slot: "inner"
-        slot { content }
+    class: "inner"
+    slot { inner-slot }
+  }
+}
+
+/* now we can use the inner slot as a target and then place a nested slot to wrap 2 components. */
+
+q-component outer-frame {
+  div.outer {
+    inner-component {
+      inner-slot {
+        slot { outer-content }
       }
     }
   }
 }
 
-q-component inner-box {
-  div {
-    class: "inner"
-    slot { inner }
-  }
-}
 
 outer-frame {
-  into {
-    slot: "content"
-    p { text { Wrapped twice } }
+  outer-content {
+    p { text { Wrapped twice } } /* is imported into the inner-component */
   }
 }
 ```
@@ -491,7 +499,7 @@ q-component my-component {
 
 ### Slot injection shorthand
 
-When a component defines slots, you can inject by naming a slot block directly in the instance:
+When a component defines slots, you can import by naming a slot block directly in the instance:
 
 ```qhtml
 q-component my-component {
@@ -563,6 +571,8 @@ Recursive example:
 ```
 
 `home.qhtml` can itself contain more `q-import { ... }` blocks. The engine keeps expanding recursively until no imports remain or the 100-import safety cap is reached.
+q-imports are cached per file, so if you have a file that generates random values and you attempt to import the file more than once, you will end up with just the first set of values
+for each page load. You can avoid this by adding a ? + random string  to the import statement, which can be achieved starting in v5.0 using `q-script`.
 
 ## `q-components.qhtml` bundle
 
