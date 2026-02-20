@@ -1725,48 +1725,41 @@ document.addEventListener("QHTMLContentLoaded", function() {
 //set the demo playground default code
 	const demoSource = `
 q-template nav-bar {
-    w3-black,w3-center {       
+  w3-black,w3-center {       
     w3-bar-item,w3-btn,w3-hover-grey {  
-	   slot { nav-items }
-       }                   
+      slot { nav-items }
+    }                   
+  }
+}
+div.w3-black.w3-text-white.w3-bar, nav-bar {
+  li { html { top-item 1 } }   
+  li { html { top-item 2 } }    
+  li { html { top-item 3 } }    
+}
+
+div.w3-container.w3-title.w3-header.w3-xlarge.w3-green {
+  html { Hello world }
+}
+
+blockquote.w3-twothird.w3-article.w3-panel.w3-light-grey, article.w3-justify, p {
+  html { Heres a great article about saying hello to the
+    world. only the way everybody else does it -- by
+    saying hello world... only in latin... okay can i type now hello               } 
+}
+div.w3-quarter.w3-nav.w3-col.w3-right.w3-padding {
+  ul.w3-list.w3-block {
+    li.w3-bar.w3-green.w3-bar-item {
+      html { navigation } 
     }
-}
-w3-bar, w3-black, w3-text-white, div {
-   nav-bar {
-     li { html { top-item 1 } }   
-       li { html { top-item 2 } }    
-       li { html { top-item 3 } }    
-   }
-}
-w3-container, w3-large, w3-title {
-    w3-header,w3-xlarge,w3-green,div {
-        html { Hello world }
-    }
-}
-w3-twothird,w3-article, w3-panel, w3-light-grey, blockquote {
-      w3-justify,article {
-            p { 
-                html { Heres a great article about saying hello to the
-                        world. only the way everybody else does it -- by
-                        saying hello world... only in latin... okay can i type now hello               } }
+    nav-bar { 
+      w3-bar {
+        li { html { right-item 1 } }   
+        li { html { right-item 2 } }    
+        li { html { right-item 3 } }    
       }
-}
-w3-quarter, w3-nav, w3-col, w3-right, w3-padding,div {
-         w3-list,w3-block,ul {
-               w3-bar {
-                  w3-green {
-                     w3-bar-item {
-                          li { html { navigation } }
-                      }
-                    }
-                  nav-bar { 
-				  li { html { right-item 1 } }   
-       li { html { right-item 2 } }    
-       li { html { right-item 3 } }    
-				  }
-                }
-           }
-   }
+    }
+  }
+}  
 
 `
 
