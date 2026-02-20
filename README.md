@@ -280,8 +280,8 @@ Runtime host shape:
 
 ```html
 <nav-bar id="main-nav" q-component="nav-bar" qhtml-component-instance="1">
-  <q-into slot="title">...</q-into>
-  <q-into slot="items">...</q-into>
+  <q-into slot="title">Main Navigation</q-into>
+  <q-into slot="items"><ul><li>Home</li><li>Contact</li></ul></q-into>
 </nav-bar>
 ```
 
