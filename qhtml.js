@@ -1,14 +1,14 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v5.0.1-alpha
+ * v5.0.2
  *
- * 5.0.1-alpha quick summary:
- * - Added q-script evaluation support with deferred runtime execution for
- *   nested content and structural compile-time handling for top-level cases.
- * - Runtime q-script now binds `this` to live DOM context and supports parent
- *   traversal patterns needed by component/slot usage.
- * - Slot/runtime projection behavior was hardened to avoid duplicate output and
- *   keep internal q-into carriers non-visual.
+ * 5.0.2 quick summary:
+ * - Runtime q-script and inline event handlers now expose consistent contextual
+ *   aliases on `this`: `this.parent`, `this.slot`, and `this.component`.
+ * - `this` remains the executing DOM element while slot/component lookup walks
+ *   live DOM ancestry (with runtime-template fallback when present).
+ * - Alias injection/cleanup is fail-safe so context detection errors do not
+ *   break handler or q-script execution.
  */
 // -----------------------------------------------------------------------------
 // Top-level helper functions
@@ -79,6 +79,7 @@ function mergeClassAttribute(element, classValue) {
 const qhtmlGeneratedComponentActionCache = new Map();
 const qhtmlGeneratedComponentTemplateCache = new Map();
 const qhtmlGeneratedComponentSlotCache = new Map();
+const qhtmlInlineEventHandlerCache = new Map();
 let qhtmlRuntimeTemplateCounter = 0;
 
 function setGeneratedComponentDefinition(componentId, definition = {}) {
@@ -116,6 +117,170 @@ function ensureQHtmlRuntimeRegistry() {
         window.qhtmlRuntimeRegistry = window.__qhtmlRuntimeRegistry;
     }
     return window.__qhtmlRuntimeRegistry;
+}
+
+function isElementNode(value) {
+    return !!value && typeof value === 'object' && value.nodeType === 1;
+}
+
+function resolveQHtmlComponentContextElement(node) {
+    if (!isElementNode(node)) {
+        return null;
+    }
+    try {
+        if (typeof node.getAttribute === 'function' && node.getAttribute('q-component')) {
+            return node.qhtml || node;
+        }
+    } catch (err) {
+        // ignore resolution errors and continue with fallbacks
+    }
+    try {
+        if (typeof node.closest === 'function') {
+            const owner = node.closest('[q-component]');
+            if (owner) {
+                return owner.qhtml || owner;
+            }
+            const runtimeRoot = node.closest('[qhtml-runtime-template-id]');
+            if (runtimeRoot && runtimeRoot.qhtml) {
+                return runtimeRoot.qhtml;
+            }
+        }
+    } catch (err) {
+        // ignore resolution errors and continue with fallback
+    }
+    try {
+        return node.qhtml || null;
+    } catch (err) {
+        return null;
+    }
+}
+
+function resolveQHtmlSlotContextElement(node) {
+    if (!isElementNode(node)) {
+        return null;
+    }
+    try {
+        if (typeof node.matches === 'function' && node.matches('q-into[slot], into[slot]')) {
+            return node;
+        }
+    } catch (err) {
+        // ignore invalid selector/matches errors
+    }
+    try {
+        if (typeof node.closest === 'function') {
+            return node.closest('q-into[slot], into[slot]') || null;
+        }
+    } catch (err) {
+        // ignore invalid selector/closest errors
+    }
+    return null;
+}
+
+function injectTemporaryThisAlias(target, key, value, cleanupStack) {
+    if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
+        return;
+    }
+    let hadOwn = false;
+    let previousDescriptor = null;
+    try {
+        hadOwn = Object.prototype.hasOwnProperty.call(target, key);
+        if (hadOwn) {
+            previousDescriptor = Object.getOwnPropertyDescriptor(target, key);
+        }
+    } catch (err) {
+        hadOwn = false;
+        previousDescriptor = null;
+    }
+    try {
+        Object.defineProperty(target, key, {
+            value,
+            writable: true,
+            configurable: true
+        });
+        cleanupStack.push({ key, hadOwn, previousDescriptor });
+    } catch (err) {
+        // ignore alias injection failures (frozen/native objects, non-configurable properties, etc.)
+    }
+}
+
+function restoreTemporaryThisAliases(target, cleanupStack) {
+    if (!target || !Array.isArray(cleanupStack) || !cleanupStack.length) {
+        return;
+    }
+    for (let i = cleanupStack.length - 1; i >= 0; i--) {
+        const entry = cleanupStack[i];
+        if (!entry) {
+            continue;
+        }
+        try {
+            if (entry.hadOwn && entry.previousDescriptor) {
+                Object.defineProperty(target, entry.key, entry.previousDescriptor);
+            } else {
+                delete target[entry.key];
+            }
+        } catch (err) {
+            // ignore cleanup failures
+        }
+    }
+}
+
+function applyQHtmlRuntimeThisContext(thisArg) {
+    if (!thisArg || (typeof thisArg !== 'object' && typeof thisArg !== 'function')) {
+        return function noopRestore() {};
+    }
+    const cleanupStack = [];
+    let parentLike = null;
+    try {
+        parentLike = thisArg.parentElement || thisArg.parentNode || null;
+    } catch (err) {
+        parentLike = null;
+    }
+    let slotElement = null;
+    let componentElement = null;
+    try {
+        slotElement = resolveQHtmlSlotContextElement(thisArg);
+    } catch (err) {
+        slotElement = null;
+    }
+    try {
+        componentElement = resolveQHtmlComponentContextElement(thisArg);
+    } catch (err) {
+        componentElement = null;
+    }
+    injectTemporaryThisAlias(thisArg, 'parent', parentLike, cleanupStack);
+    injectTemporaryThisAlias(thisArg, 'slot', slotElement || null, cleanupStack);
+    injectTemporaryThisAlias(thisArg, 'component', componentElement || null, cleanupStack);
+    return function restoreThisContext() {
+        restoreTemporaryThisAliases(thisArg, cleanupStack);
+    };
+}
+
+function executeQHtmlInlineEventHandler(scriptBody, thisArg, eventObj, propName = '') {
+    const body = String(scriptBody || '');
+    if (!body.trim()) {
+        return undefined;
+    }
+    let fn = qhtmlInlineEventHandlerCache.get(body);
+    if (!fn) {
+        try {
+            fn = new Function('event', body);
+            qhtmlInlineEventHandlerCache.set(body, fn);
+        } catch (err) {
+            console.error('Failed to compile inline event handler', propName, err);
+            return undefined;
+        }
+    }
+    const restoreThisContext = applyQHtmlRuntimeThisContext(thisArg);
+    try {
+        return fn.call(thisArg, eventObj);
+    } catch (err) {
+        console.error('Error executing inline event handler for', propName, err);
+        return undefined;
+    } finally {
+        if (typeof restoreThisContext === 'function') {
+            restoreThisContext();
+        }
+    }
 }
 
 function isIdentifierTokenChar(ch) {
@@ -321,27 +486,9 @@ function executeQScriptBlock(scriptBody, context, thisArg, hasExplicitThisArg = 
     const body = String(scriptBody || '');
     const hostTag = context && context.tag ? context.tag : '';
     const boundThis = hasExplicitThisArg ? thisArg : (context || {});
-    let injectedParentAlias = false;
-    if (hasExplicitThisArg && thisArg && typeof thisArg === 'object') {
-        const parentLike = thisArg.parentElement || thisArg.parentNode || null;
-        if (!Object.prototype.hasOwnProperty.call(thisArg, 'parent')) {
-            try {
-                Object.defineProperty(thisArg, 'parent', {
-                    value: parentLike,
-                    writable: true,
-                    configurable: true
-                });
-                injectedParentAlias = true;
-            } catch (err) {
-                // ignore alias-injection failures and continue with native object shape
-            }
-        } else {
-            try {
-                thisArg.parent = parentLike;
-            } catch (err) {
-                // ignore read-only parent assignments
-            }
-        }
+    let restoreThisContext = null;
+    if (hasExplicitThisArg) {
+        restoreThisContext = applyQHtmlRuntimeThisContext(thisArg);
     }
     try {
         const fn = new Function(body);
@@ -359,12 +506,8 @@ function executeQScriptBlock(scriptBody, context, thisArg, hasExplicitThisArg = 
         componentLogger.error(hostTag, `q-script execution failed: ${message}`);
         return '';
     } finally {
-        if (injectedParentAlias && thisArg && typeof thisArg === 'object') {
-            try {
-                delete thisArg.parent;
-            } catch (err) {
-                // ignore cleanup failures
-            }
+        if (typeof restoreThisContext === 'function') {
+            restoreThisContext();
         }
     }
 }
@@ -617,9 +760,6 @@ function syncGeneratedComponentSlotsFromCarriers(host) {
 
 function normalizeImplicitContentToSingleSlotCarrier(host, slotName) {
     if (!host || !slotName) {
-        return;
-    }
-    if (host.__qhtmlComponentTemplateHydrated) {
         return;
     }
     if (findComponentIntoCarriers(host).length) {
@@ -1272,6 +1412,10 @@ function ensureGeneratedCustomElement(componentId, actions) {
     }
     class GeneratedQHtmlComponent extends HTMLElement {
         connectedCallback() {
+            const slotNames = getGeneratedComponentSlotNames(componentId);
+            if (slotNames.length === 1) {
+                normalizeImplicitContentToSingleSlotCarrier(this, slotNames[0]);
+            }
             ensureGeneratedComponentTemplateHydrated(this);
             syncGeneratedComponentSlotsFromCarriers(this);
             const actionNames = (qhtmlGeneratedComponentActionCache.get(componentId) || [])
@@ -2290,7 +2434,7 @@ function buildQIntoCarriersFromSlotEntries(slotEntries) {
     }).filter(Boolean).join('\n');
 }
 
-function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttributes = {}, classes = [], actions = []) {
+function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttributes = {}, classes = [], actions = [], hostBlocks = []) {
     const attrs = Object.assign({}, rootAttributes, {
         'q-component': componentId,
         'qhtml-component-instance': '1'
@@ -2323,7 +2467,11 @@ function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttribute
     const readyBlock = readyLines.length
         ? `onReady {\n${readyLines.map((line) => `  ${line}`).join('\n')}\n}`
         : '';
-    const body = [attrLines, readyBlock, carrierBlocks].filter((part) => String(part || '').trim()).join('\n');
+    const hostBlockSource = (Array.isArray(hostBlocks) ? hostBlocks : [])
+        .map((block) => String(block || '').trim())
+        .filter(Boolean)
+        .join('\n');
+    const body = [attrLines, hostBlockSource, readyBlock, carrierBlocks].filter((part) => String(part || '').trim()).join('\n');
     return `${componentId} {\n${indentQHtmlBlock(body)}\n}`;
 }
 
@@ -2471,6 +2619,8 @@ function transformComponentDefinitionsHelper(input) {
                 const rootAttributes = extractTopLevelInvocationAttributes(body);
                 const children = splitTopLevelSegments(body);
                 const slotEntries = [];
+                const hostBlocks = [];
+                const nonSlotChildStarts = new Set();
                 let hasSlotTagBlocks = false;
                 let hasLegacySlotDirective = false;
 
@@ -2491,6 +2641,14 @@ function transformComponentDefinitionsHelper(input) {
                 }
 
                 for (const seg of children) {
+                    const segTag = String(seg && seg.tag ? seg.tag : '').trim();
+                    if (/^on[A-Za-z0-9_]+$/i.test(segTag)) {
+                        hostBlocks.push(seg.block);
+                        if (typeof seg.start === 'number') {
+                            nonSlotChildStarts.add(seg.start);
+                        }
+                        continue;
+                    }
                     if (seg.tag === 'into' || seg.tag === 'q-into') {
                         continue;
                     }
@@ -2519,6 +2677,7 @@ function transformComponentDefinitionsHelper(input) {
                 if (!hasExplicitSlotUsage && singleSlotName) {
                     const autoContent = children
                         .filter((seg) => seg.tag !== 'into' && seg.tag !== 'q-into')
+                        .filter((seg) => !(typeof seg.start === 'number' && nonSlotChildStarts.has(seg.start)))
                         .map((seg) => seg.block)
                         .join('\n')
                         .trim();
@@ -2534,7 +2693,7 @@ function transformComponentDefinitionsHelper(input) {
 
                 let replacement = '';
                 if (kind === 'component') {
-                    replacement = buildRuntimeComponentInvocation(id, slotEntries, rootAttributes, componentClasses, def.actions);
+                    replacement = buildRuntimeComponentInvocation(id, slotEntries, rootAttributes, componentClasses, def.actions, hostBlocks);
                 } else {
                     const slotMap = slotEntriesToMap(slotEntries);
                     const suppressMissingWarnings = !hasExplicitSlotUsage && children.length === 0;
@@ -2713,7 +2872,7 @@ function extractPropertiesAndChildren(input) {
       });
     } else {
       const cleaned = sanitizeInlineHandler(raw);
-      segments.push({ type: 'property', name: currentSegment.name, value: cleaned });
+      segments.push({ type: 'property', name: currentSegment.name, value: cleaned, isFunction: true });
     }
     currentSegment = null;
   };
@@ -3005,13 +3164,24 @@ function processPropertySegment(segment, parentElement) {
             const fn = new Function(fnBody);
             if (/^on\w+/i.test(propNameRaw)) {
                 const handler = function(event) {
+                    const restoreThisContext = applyQHtmlRuntimeThisContext(this);
                     try {
                         return fn.call(this, event);
                     } catch (err) {
                         console.error('Error executing event handler for', propNameRaw, err);
+                    } finally {
+                        if (typeof restoreThisContext === 'function') {
+                            restoreThisContext();
+                        }
                     }
                 };
                 parentElement[propNameLower] = handler;
+                const inlineBodyLiteral = JSON.stringify(fnBody);
+                const inlinePropLiteral = JSON.stringify(propNameRaw);
+                parentElement.setAttribute(
+                    propNameRaw,
+                    `return window.__qhtmlInvokeInlineHandler(this, event, ${inlineBodyLiteral}, ${inlinePropLiteral});`
+                );
             } else {
                 let result;
                 try {
@@ -3266,6 +3436,11 @@ function ensureInitialImportBarrier() {
 if (typeof window !== 'undefined') {
     window.extractPropertiesAndChildren = extractPropertiesAndChildren;
     window.processSegment = processSegment;
+    if (typeof window.__qhtmlInvokeInlineHandler !== 'function') {
+        window.__qhtmlInvokeInlineHandler = function(thisArg, eventObj, scriptBody, propName) {
+            return executeQHtmlInlineEventHandler(scriptBody, thisArg, eventObj, propName);
+        };
+    }
     installElementQHtmlGetter();
     installDocumentQHtmlQueryHelpers();
 }

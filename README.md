@@ -1,10 +1,6 @@
 # QHTML.js (Quick HTML)
 
-## Warning: 
-> v5.0 has changes which can break code if migrating from earlier versions of q-html.js.
-> To ensure your code is compatible with v5.0, please use `upgrade.html` to convert your existing q-html code to the latest version.
-
----
+> Warning: v5.0 has changes which can break code if migrating from pre-v5.0 q-html.  If you are just upgrading q-html.js but using existing code, then please use the upgrade.html file to upgrade your q-html code to v5.0
 
 QHTML is a compact, readable way to write HTML using a CSS-like block syntax. It turns short, clean markup into real HTML at runtime, without extra boilerplate. Drop your markup inside a `<q-html>` tag, include `qhtml.js`, and the browser renders normal HTML for you.
 
@@ -423,6 +419,73 @@ Runtime carrier output:
 ```
 
 Runtime component methods and helper APIs are documented in the `JavaScript API` section at the end of this README.
+
+### `this` context in runtime component code
+
+When JavaScript runs inside a `q-component` instance, QHTML provides a runtime-aware `this` context that helps you reach the current element, its slot container, and the owning component instance without manual DOM traversal.
+
+In runtime code paths (event handlers and runtime-evaluated script blocks), `this` behaves as follows:
+
+- `this`: the current executing DOM element
+- `this.slot`: the nearest slot container (`q-into`/`into`) for that element, or `null` if no slot context exists
+- `this.component`: the nearest owning `q-component` instance, or `null` when no component instance is in scope
+
+This is especially useful when projected slot content needs to call component methods.
+
+```qhtml
+q-component my-panel {
+  function notify(msg) { alert(msg) }
+
+  div.shell {
+    slot { body }
+  }
+}
+
+my-panel {
+  body {
+    div {
+      onclick {
+        this.component.notify("clicked from slot content")
+      }
+      text { Click me }
+    }
+  }
+}
+```
+
+In this example:
+
+- `this` is the clicked `div`
+- `this.component` is the live `my-panel` instance
+- `this.component.notify(...)` calls the component method directly
+
+Example with all three context values:
+
+```qhtml
+q-component demo-box {
+  slot { main }
+}
+
+demo-box {
+  main {
+    div {
+      onclick {
+        alert("this: " + this.tagName)
+        alert("this.component: " + (this.component ? this.component.tagName : "null"))
+        alert("this.slot: " + (this.slot ? this.slot.tagName : "null"))
+      }
+      text { Inspect context }
+    }
+  }
+}
+```
+
+Scope and limitations:
+
+- This context is for runtime `q-component` instances.
+- Do not rely on `this.component`/`this.slot` inside `q-template` definitions.
+- Do not rely on component context in markup that is not running inside a `q-component` instance.
+- Outside component scope, `this.component` and `this.slot` are `null`.
 
 ### `q-template`: compile-time pure HTML (non-traceable output)
 
