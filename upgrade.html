@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QHTML v5 Upgrade Helper</title>
+  <style>
+    :root {
+      --bg: #f3f6fa;
+      --panel: #ffffff;
+      --text: #132238;
+      --muted: #4a5c74;
+      --border: #d0dae6;
+      --accent: #0f5fb8;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 16px 20px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.4rem;
+    }
+    p, li {
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0 0 10px;
+    }
+    ul {
+      margin: 0 0 12px 18px;
+      padding: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .pane label {
+      font-weight: 600;
+      margin: 0 0 6px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 420px;
+      resize: vertical;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      box-sizing: border-box;
+      background: #fcfdff;
+      color: #12253a;
+    }
+    .toolbar {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 1px solid var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button.secondary {
+      color: var(--accent);
+      background: #ffffff;
+    }
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      textarea {
+        min-height: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>QHTML v5 Upgrade Helper</h1>
+      <p>
+        Paste older pre-v5 QHTML on the left. The right side updates automatically with a
+        best-effort conversion to current v5 syntax.
+      </p>
+      <p>What this converter updates:</p>
+      <ul>
+        <li>`text: "..."` or `content: "..."` style properties to `text { ... }` blocks.</li>
+        <li>`q-component { id: "my-component" ... }` to `q-component my-component { ... }`.</li>
+        <li>`slot { name: "my-slot" }` or `slot { id: "my-slot" }` to `slot { my-slot }`.</li>
+        <li>`div { slot: "my-slot" ... }` to `my-slot { div { ... } }` style slot wrappers.</li>
+      </ul>
+      <p>
+        Directions: paste code, copy converted output, then review manually before committing.
+        This tool is intentionally conservative and does not replace a full parser/compiler.
+      </p>
+      <div class="grid">
+        <div class="pane">
+          <label for="legacyInput">Legacy / Existing QHTML</label>
+          <textarea id="legacyInput" spellcheck="false" placeholder="<q-html>
+  q-component {
+    id: &quot;my-card&quot;;
+    div {
+      slot: &quot;header&quot;;
+      text: &quot;Title&quot;;
+    }
+    slot { name: &quot;header&quot; }
+  }
+</q-html>"></textarea>
+        </div>
+        <div class="pane">
+          <label for="upgradedOutput">Upgraded v5 QHTML</label>
+          <textarea id="upgradedOutput" spellcheck="false" readonly></textarea>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="copyBtn" type="button">Copy Upgraded Output</button>
+        <button id="clearBtn" class="secondary" type="button">Clear</button>
+        <span class="status" id="statusText">Ready.</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const legacyInput = document.getElementById('legacyInput');
+    const upgradedOutput = document.getElementById('upgradedOutput');
+    const copyBtn = document.getElementById('copyBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusText = document.getElementById('statusText');
+
+    function isIdentifierTokenChar(ch) {
+      return !!ch && /[A-Za-z0-9_-]/.test(ch);
+    }
+
+    function findStandaloneKeyword(source, keyword, fromIndex = 0) {
+      let pos = Math.max(0, fromIndex);
+      while (pos < source.length) {
+        const idx = source.indexOf(keyword, pos);
+        if (idx === -1) return -1;
+        const before = idx > 0 ? source[idx - 1] : '';
+        const after = source[idx + keyword.length] || '';
+        if (!isIdentifierTokenChar(before) && !isIdentifierTokenChar(after)) {
+          return idx;
+        }
+        pos = idx + keyword.length;
+      }
+      return -1;
+    }
+
+    function findMatchingBrace(source, openIdx) {
+      let depth = 0;
+      let inSingle = false;
+      let inDouble = false;
+      let inBacktick = false;
+      let escaped = false;
+
+      for (let i = openIdx; i < source.length; i++) {
+        const ch = source[i];
+
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if ((inSingle || inDouble || inBacktick) && ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (!inDouble && !inBacktick && ch === '\'') {
+          inSingle = !inSingle;
+          continue;
+        }
+        if (!inSingle && !inBacktick && ch === '"') {
+          inDouble = !inDouble;
+          continue;
+        }
+        if (!inSingle && !inDouble && ch === '`') {
+          inBacktick = !inBacktick;
+          continue;
+        }
+        if (inSingle || inDouble || inBacktick) continue;
+
+        if (ch === '{') depth++;
+        if (ch === '}') {
+          depth--;
+          if (depth === 0) return i;
+        }
+      }
+      return -1;
+    }
+
+    function parseTopLevelQuotedProperties(source) {
+      const input = String(source || '');
+      const props = [];
+      let depth = 0;
+      let inSingle = false;
+      let inDouble = false;
+      let inBacktick = false;
+      let escaped = false;
+      let i = 0;
+
+      while (i < input.length) {
+        const ch = input[i];
+
+        if (escaped) {
+          escaped = false;
+          i++;
+          continue;
+        }
+        if ((inSingle || inDouble || inBacktick) && ch === '\\') {
+          escaped = true;
+          i++;
+          continue;
+        }
+        if (!inDouble && !inBacktick && ch === '\'') {
+          inSingle = !inSingle;
+          i++;
+          continue;
+        }
+        if (!inSingle && !inBacktick && ch === '"') {
+          inDouble = !inDouble;
+          i++;
+          continue;
+        }
+        if (!inSingle && !inDouble && ch === '`') {
+          inBacktick = !inBacktick;
+          i++;
+          continue;
+        }
+        if (inSingle || inDouble || inBacktick) {
+          i++;
+          continue;
+        }
+
+        if (ch === '{') {
+          depth++;
+          i++;
+          continue;
+        }
+        if (ch === '}') {
+          depth--;
+          i++;
+          continue;
+        }
+
+        if (depth !== 0 || !/[A-Za-z_]/.test(ch)) {
+          i++;
+          continue;
+        }
+
+        const keyStart = i;
+        let cursor = i;
+        while (cursor < input.length && /[A-Za-z0-9_.-]/.test(input[cursor])) {
+          cursor++;
+        }
+        const propName = input.slice(keyStart, cursor);
+
+        while (cursor < input.length && /\s/.test(input[cursor])) cursor++;
+        if (input[cursor] !== ':') {
+          i = keyStart + 1;
+          continue;
+        }
+        cursor++;
+        while (cursor < input.length && /\s/.test(input[cursor])) cursor++;
+        if (input[cursor] !== '"') {
+          i = keyStart + 1;
+          continue;
+        }
+
+        cursor++;
+        let value = '';
+        while (cursor < input.length) {
+          const q = input[cursor];
+          if (q === '\\' && cursor + 1 < input.length) {
+            value += input[cursor + 1];
+            cursor += 2;
+            continue;
+          }
+          if (q === '"') {
+            break;
+          }
+          value += q;
+          cursor++;
+        }
+        if (cursor >= input.length || input[cursor] !== '"') {
+          i = keyStart + 1;
+          continue;
+        }
+        cursor++;
+
+        while (cursor < input.length && /\s/.test(input[cursor])) cursor++;
+        if (input[cursor] === ';') {
+          cursor++;
+        }
+
+        props.push({
+          name: propName,
+          value,
+          start: keyStart,
+          end: cursor
+        });
+
+        i = cursor;
+      }
+
+      return props;
+    }
+
+    function getTopLevelQuotedProp(source, propNames) {
+      const wanted = new Set((propNames || []).map((name) => String(name).toLowerCase()));
+      const props = parseTopLevelQuotedProperties(source);
+      for (const prop of props) {
+        const propName = String(prop.name || '').toLowerCase();
+        if (wanted.has(propName)) {
+          return prop.value;
+        }
+      }
+      return '';
+    }
+
+    function getTopLevelLegacySlotDirective(source) {
+      const props = parseTopLevelQuotedProperties(source);
+      for (const prop of props) {
+        const propName = String(prop.name || '');
+        const value = String(prop.value || '');
+        if (propName === 'slot' || propName.endsWith('.slot')) {
+          const maybeScoped = value.includes('.') ? value.split('.').pop() : value;
+          return {
+            property: propName,
+            slotName: (maybeScoped || '').trim()
+          };
+        }
+      }
+      return null;
+    }
+
+    function stripTopLevelProps(source, propNames) {
+      const wanted = new Set((propNames || []).map((name) => String(name).toLowerCase()));
+      const props = parseTopLevelQuotedProperties(source);
+      if (!props.length) {
+        return source;
+      }
+      let out = '';
+      let last = 0;
+      for (const prop of props) {
+        if (!wanted.has(String(prop.name || '').toLowerCase())) {
+          continue;
+        }
+        out += source.slice(last, prop.start);
+        last = prop.end;
+      }
+      out += source.slice(last);
+      return out;
+    }
+
+    function indentBlock(source, spaces = 2) {
+      const pad = ' '.repeat(spaces);
+      return String(source || '')
+        .split('\n')
+        .map((line) => (line.trim() ? pad + line : line))
+        .join('\n');
+    }
+
+    function convertLegacyTextProps(source) {
+      return source.replace(
+        /\b(?:text|content|contents|textcontent|textcontents|innertext)\b\s*:\s*"([^"]*)"\s*;?/gi,
+        (_m, value) => `text { ${value} }`
+      );
+    }
+
+    function convertLegacySlotDefinitions(source) {
+      let out = String(source || '');
+      let cursor = 0;
+      while (true) {
+        const idx = findStandaloneKeyword(out, 'slot', cursor);
+        if (idx === -1) break;
+        let open = idx + 4;
+        while (open < out.length && /\s/.test(out[open])) open++;
+        if (out[open] !== '{') {
+          cursor = idx + 4;
+          continue;
+        }
+        const close = findMatchingBrace(out, open);
+        if (close === -1) break;
+        const inner = out.slice(open + 1, close);
+        const slotName = getTopLevelQuotedProp(inner, ['name', 'id']);
+        if (!slotName) {
+          cursor = close + 1;
+          continue;
+        }
+        const replacement = `slot { ${slotName} }`;
+        out = out.slice(0, idx) + replacement + out.slice(close + 1);
+        cursor = idx + replacement.length;
+      }
+      return out;
+    }
+
+    function convertLegacyComponentDefinitions(source) {
+      let out = String(source || '');
+      let cursor = 0;
+      while (true) {
+        const idx = findStandaloneKeyword(out, 'q-component', cursor);
+        if (idx === -1) break;
+        let after = idx + 'q-component'.length;
+        while (after < out.length && /\s/.test(out[after])) after++;
+        if (out[after] !== '{') {
+          cursor = after;
+          continue;
+        }
+        const close = findMatchingBrace(out, after);
+        if (close === -1) break;
+        const inner = out.slice(after + 1, close);
+        const componentId = getTopLevelQuotedProp(inner, ['id']);
+        if (!componentId) {
+          cursor = close + 1;
+          continue;
+        }
+        const cleaned = stripTopLevelProps(inner, ['id']).trim();
+        const replacement = cleaned
+          ? `q-component ${componentId} {\n${indentBlock(cleaned, 2)}\n}`
+          : `q-component ${componentId} {}`;
+        out = out.slice(0, idx) + replacement + out.slice(close + 1);
+        cursor = idx + replacement.length;
+      }
+      return out;
+    }
+
+    function rewriteInlineSlotBlocks(source) {
+      const input = String(source || '');
+      let out = '';
+      let i = 0;
+      while (i < input.length) {
+        if (/\s/.test(input[i])) {
+          out += input[i];
+          i++;
+          continue;
+        }
+
+        const tokenStart = i;
+        let j = i;
+        while (j < input.length && !/[{:;]/.test(input[j])) j++;
+
+        if (j >= input.length) {
+          out += input.slice(i);
+          break;
+        }
+
+        const tokenRaw = input.slice(tokenStart, j);
+        const token = tokenRaw.trim();
+
+        if (input[j] === '{' && token) {
+          const close = findMatchingBrace(input, j);
+          if (close === -1) {
+            out += input.slice(i);
+            break;
+          }
+          const inner = input.slice(j + 1, close);
+          const rewrittenInner = rewriteInlineSlotBlocks(inner);
+          const tagName = token.toLowerCase();
+          const canWrap = !['into', 'q-into', 'slot', 'text', 'html', 'css', 'style'].includes(tagName);
+          const directive = canWrap ? getTopLevelLegacySlotDirective(rewrittenInner) : null;
+
+          if (directive && directive.slotName) {
+            const cleanedInner = stripTopLevelProps(rewrittenInner, [directive.property]).trim();
+            const childBlock = cleanedInner
+              ? `${token} {\n${indentBlock(cleanedInner, 2)}\n}`
+              : `${token} {}`;
+            out += `${directive.slotName} {\n${indentBlock(childBlock, 2)}\n}`;
+          } else {
+            out += `${tokenRaw}{${rewrittenInner}}`;
+          }
+          i = close + 1;
+          continue;
+        }
+
+        if (input[j] === ':') {
+          let k = j + 1;
+          while (k < input.length && input[k] !== ';' && input[k] !== '\n') k++;
+          if (k < input.length && input[k] === ';') k++;
+          out += input.slice(tokenStart, k);
+          i = k;
+          continue;
+        }
+
+        out += input.slice(tokenStart, j + 1);
+        i = j + 1;
+      }
+      return out;
+    }
+
+    function convertLegacySyntax(source) {
+      let out = String(source || '').replace(/\r\n/g, '\n');
+      out = convertLegacyComponentDefinitions(out);
+      out = convertLegacySlotDefinitions(out);
+      out = convertLegacyTextProps(out);
+      out = rewriteInlineSlotBlocks(out);
+      return out;
+    }
+
+    function updateOutput() {
+      const input = legacyInput.value || '';
+      const output = convertLegacySyntax(input);
+      upgradedOutput.value = output;
+      statusText.textContent = input ? 'Converted automatically.' : 'Ready.';
+    }
+
+    legacyInput.addEventListener('input', updateOutput);
+    clearBtn.addEventListener('click', () => {
+      legacyInput.value = '';
+      upgradedOutput.value = '';
+      statusText.textContent = 'Cleared.';
+      legacyInput.focus();
+    });
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(upgradedOutput.value);
+        statusText.textContent = 'Copied upgraded output to clipboard.';
+      } catch (_err) {
+        statusText.textContent = 'Copy failed. Select and copy manually.';
+      }
+    });
+
+    updateOutput();
+  </script>
+</body>
+</html>

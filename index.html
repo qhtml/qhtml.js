@@ -5,15 +5,14 @@
     <meta name="q-html official site" content="width=device-width">
     <title>q-html official site</title>
 	
-<script src="qhtml.js" type="text/javascript"></script> <!-- required for q-html parsing -->
+<script src="qhtml3.7.js" type="text/javascript"></script> <!-- required for q-html parsing -->
 
 <script src="w3-tags.js" type="text/javascript"></script> <!-- optional w3-tags addon (w3.css tags w3-*) -->
 
 <script src="bs-tags.js" type="text/javascript"></script> <!-- optional bs-tags addon (bootstrap tags bs-*) -->
 
 <script src="tech-tags.js" type="text/javascript"></script> <!-- optional tech-tags addon (technology tags tech-*) -->
-		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<script src="bs.js" type="text/javascript"></script>
+
 
 
 
@@ -56,7 +55,7 @@
 										style: "width: 25%; height: 50%";
 									
 										w3-label,w3-text-white,div {
-											text: "Search";
+											text { Search }
 								
 											w3-input,input {
 										
@@ -67,11 +66,11 @@
 									w3-display-topright,w3-bar-item,div {
 										id: "mainWindowLoginStatus";
 										w3-center,span {
-											text: "Logged in as";
+											text { Logged in as }
 										}
 										br { }
 										w3-center,w3-bold,span {
-											text: "user@domain.com";
+											text { user@domain.com }
 										}
 									}
 									
@@ -79,7 +78,7 @@
 								       style: "width: 15%;";
 										
 											w3-text-green,w3-title,w3-padding-top-32,w3-padding-right-32,h3 {
-												text: "&lt;/q-html&gt;";
+												text { &lt;/q-html&gt; }
 											}
 									
 										 
@@ -123,12 +122,11 @@
 											w3-center {
 												span {
 													style: "margin-left: 20%";
-													text: "🏠"
-												}
+													text { 🏠 }}
 												a { 
 													style: "margin-right: 10%; margin-left: 10%; overflow: hidden; wrap: no-wrap;";
-													text: "️Welcome"
-													onclick: "setContentPanel('Welcome')";
+													text { ️Welcome }
+onclick: "setContentPanel('Welcome')";
 													href: "javascript:void(0)"
 												}
 											}
@@ -139,12 +137,10 @@
 											w3-center {
 												span {
 													style: "margin-left: 22%";
-													text: "ℹ️ "
-												}
+													text { ℹ️  }}
 												span { 
 													style: "margin-right: 9%; margin-left: 12%; overflow: hidden; wrap: no-wrap;";
-													text: "️ Support"
-												}
+													text { ️ Support }}
 											}
 											
 										}
@@ -152,12 +148,11 @@
 											w3-center {
 												span {
 													style: "margin-left: 20%";
-													text: "📥"
-												}
+													text { 📥 }}
 												a { 
 													style: "margin-right: 10%; margin-left: 10%; overflow: hidden; wrap: no-wrap;";
-													text: "️Downloads"
-													onclick: "setContentPanel('Downloads')";
+													text { ️Downloads }
+onclick: "setContentPanel('Downloads')";
 													href: "javascript:void(0)"
 												}
 											}
@@ -172,8 +167,7 @@
 												}
 												span { 
 													style: "margin-right: 10%; margin-left: 10%; overflow: hidden; wrap: no-wrap;";
-													text: "️Wordpress"
-												}
+													text { ️Wordpress }}
 											}
 										}
 										
@@ -181,15 +175,13 @@
 												w3-center {
 													span {
 														style: "margin-left: 20%";
-														text: "📝"
-													}
+														text { 📝 }}
 													a { 
 														href: "javascript:void(0)";
 														onClick: "setContentPanel('Examples');";
 														
 														style: "margin-right: 10%; margin-left: 10%; overflow: hidden; wrap: no-wrap;";
-														text: "️ Examples"
-													}
+														text { ️ Examples }}
 												}
 											}
 											div {
@@ -202,7 +194,7 @@
 													}
 													span {
 														style: "margin-right: 10%; margin-left: 10%; overflow: hidden; wrap: no-wrap;";
-														text: "w3-tags.js";
+														text { w3-tags.js }
 													}
 												}
 											}
@@ -244,37 +236,30 @@
 								class: "contentPanel";
 									id: "contentPanel_Welcome"
 								h2  {
-										text: "Welcome";
+										text { Welcome }
 									}
 									article {
 									
 									
-										text: "Hello and welcome to the q-html home page. Here you can find many different resources relating to q-html, the quick and easy way to create HTML that saves time, effort, and improves readability for developers and search engines. ";
+										text { Hello and welcome to the q-html home page. Here you can find many different resources relating to q-html, the quick and easy way to create HTML that saves time, effort, and improves readability for developers and search engines.  }
 										
 									}
 									br { }
 									article {
-										text: "If you are like me, you are probably asking yourself: "
-										i { 
-											text: " How does it work? "
-										}
+										text { If you are like me, you are probably asking yourself:  }
+i { 
+											text {  How does it work?  }}
 									}
 									article {
-										text: "The answer is actually very simple -- it just works. Unlike many modern scripting languages, q-html is intentionally simple. "
-										
-										
-									}
+										text { The answer is actually very simple -- it just works. Unlike many modern scripting languages, q-html is intentionally simple.  }}
 									br { }
 									article {
-									  text: "Lets start off with an example q-html element to demonstrate. "
-									}
+									  text { Lets start off with an example q-html element to demonstrate.  }}
 									h3 { 
-											text: "Basic usage"
-									}
+											text { Basic usage }}
 									blockquote {
 										w3-label,span {
-											text: "Simple button with hello world alert message on click"
-										}
+											text { Simple button with hello world alert message on click }}
 										w3-input,textarea {
 											style: "min-height: 170px"
 											id: "welcomeExample01qhtmlCodeBox"
@@ -283,53 +268,46 @@
 										}
 										br { }
 										w3-label,span {
-											text: "Resulting q-html code"
-										}
+											text { Resulting q-html code }}
 										w3-card,w3-white,div {
 											style: "min-height: 170px; padding: 12px";
 											button {
-												text: "Click Here!"
-												onclick: "alert('Hello world!')"
+												text { Click Here! }
+onclick: "alert('Hello world!')"
 											}	
 										}
 									}
 										br { }
 										br { }
 										h3 { 
-											text: "Nesting and Combining Tags"
-										}
+											text { Nesting and Combining Tags }}
 										article { 
-											text: "q-html conveniently allows for any inline attribute to be attached to any element in a declarative, simple way. Nesting is fully supported using brackets and by combining multiple tags together."
-										}
+											text { q-html conveniently allows for any inline attribute to be attached to any element in a declarative, simple way. Nesting is fully supported using brackets and by combining multiple tags together. }}
 										blockquote {
 										   w3-label,span {
-												text: "Nested elements and combined Elements"
-											}
+												text { Nested elements and combined Elements }}
 											w3-input,textarea {
 												style: "min-height: 240px"
 												id: "welcomeExample02qhtmlCodeBox"
 											}
 											br { }
 											w3-label,span {
-												text: "Resulting q-html code"
-											}	
+												text { Resulting q-html code }}	
 											w3-card,w3-white,div {
 												style: "min-height: 220px; padding: 12px;";
 												div {
 													style: "width: 120px; background-color: blue";
-													text: "Here's a Container div";
+													text { Here's a Container div }
 													br { }
 													a {
 														href: "#"
 														onclick: "alert('hello world!')"
-														text: "Click here"
-													}
+														text { Click here }}
 													br { }
 													a,button {
 														href: "#"
 														onclick: "alert('hello world!')"
-														text: "or here!"
-													}
+														text { or here! }}
 												}
 											}	
 										}
@@ -337,18 +315,17 @@
 										br { }
 										br { }
 										h3 { 
-											text: "w3-tags.js addon"
-										}
+											text { w3-tags.js addon }}
 										article { 
-											text: "q-html has an extremely powerful addon, made by the same author, called w3-tags.js. This addon turns q-html into an easy-to-use web building tool. To learn more about w3.css visit "
-											a {
+											text { q-html has an extremely powerful addon, made by the same author, called w3-tags.js. This addon turns q-html into an easy-to-use web building tool. To learn more about w3.css visit  }
+a {
 												href: "https://www.w3schools.com/w3css/default.asp";
-												text: "https://www.w3schools.com/w3css/";
+												text { https://www.w3schools.com/w3css/ }
 											}
 										}
 										blockquote {
 										   w3-label,span {
-												text: "Creating a form with w3.css classes using w3-tags.js";
+												text { Creating a form with w3.css classes using w3-tags.js }
 											}
 											w3-input,textarea {
 												style: "min-height: 240px"
@@ -356,28 +333,27 @@
 											}
 											br { }
 											w3-label,span {
-												text: "Resulting q-html code"
-											}	
+												text { Resulting q-html code }}	
 											w3-card,w3-white,div {
 												style: "min-height: 220px; padding: 12px;";
 												w3-panel,w3-card,w3-form,w3-grey,div {
 													w3-panel {
 														span {
-															text: "First Name";
+															text { First Name }
 															w3-hover-blue,w3-input,input {
 																type: "text"
 																name: "firstName"
 															}
 														}
 														span {
-															text: "Nickname ";
+															text { Nickname  }
 															w3-hover-blue,w3-input,input {
 																type: "text";
 																name: "Nickname";
 															}
 														}
 														span {
-															text: "Submit Results ";
+															text { Submit Results  }
 															w3-hover-blue,w3-input,w3-button,w3-green,input {
 																type: "submit";
 															
@@ -394,45 +370,29 @@
 									div {
 										id: "contentPanel_Examples";
 										class: "w3-hide contentPanel";
-										h2 { text: "Examples"; }
+										h2 { text { Examples } }
 										br {}
-										span { text: "w3.css navbar"; }
+										span { text { w3.css navbar } }
 										code-view {
 										id: "example01";
 										
 											}
-
-		br {}
-										span { text: "bs-tags.js (boostrap) simple example"; }
-										code-view {
-										id: "example02";
-										
-											}
-
-		br {}
-										span { text: "bs-tags.js (boostrap) navbar example"; }
-										code-view {
-										id: "example03";
-										
-											}
-			
 											
 										}
-		
 									}
 									
 									div {
 										id: "contentPanel_Downloads";
 										class: "w3-hide contentPanel";
 										h2  {
-											text: "Downloads";
+											text { Downloads }
 										}
 										article {
-											text: "Offical Github Repo:"
-											br { }
+											text { Offical Github Repo: }
+br { }
 											a {
-												href: "https://github.com/qhtml";
-												text: "https://github.com/qhtml";
+												href: "https://github.com/mikeNickaloff/qhtml";
+												text { https://github.com/mikeNickaloff/qhtml }
 											}
 										}
 									}
@@ -455,8 +415,7 @@
 	</script>
 	
 	<script type="module">
-	/* register the tech-panel paint worklet for tech-tags.js */
-	CSS.paintWorklet.addModule("tech-panel-worklet.js");
+	/* tech-tags.js now auto-registers tech-panel-worklet.js */
 	/* import QPainter from './q-painter.js'
 	import renderQPainter from './q-painter.js'
 	
@@ -608,8 +567,8 @@
 	document.querySelector("#welcomeExample01qhtmlCodeBox").value = `
 <q-html>
 	button {
-	    text: "Click Here!"
-	    onclick: "alert('Hello world!')"
+	    text { Click Here! }
+onclick: "alert('Hello world!')"
 	}
 </q-html>`
 
@@ -617,19 +576,17 @@ document.querySelector("#welcomeExample02qhtmlCodeBox").value = `
 <q-html>
 	div {
 		style: "width: 120px; background-color: blue"
-		text: "Here's a Container div"
-		br { }
+		text { Here's a Container div }
+br { }
 		a {
 			href: "#"
 			onclick: "alert('hello world!')"
-			text: "Click here"
-		}
+			text { Click here }}
 		br { }
 		a,button {
 			href: "#"
 			onclick: "alert('hello world!')"
-			text: "or here!"
-		}
+			text { or here! }}
 	}
 </q-html>
 `
@@ -639,21 +596,21 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
 		w3-panel,w3-card,w3-form,w3-grey,div {
 			w3-panel,w3-grey {
 				span {
-					text: "First Name";
+					text { First Name }
 					w3-hover-blue,w3-input,input {
 						type: "text"
 						name: "firstName"
 					}
 				}
 				span {
-					text: "Nickname ";
+					text { Nickname  }
 					w3-hover-blue,w3-input,input {
 						type: "text";
 						name: "Nickname";
 					}
 				}
 				span {
-					text: "Submit Results ";
+					text { Submit Results  }
 					w3-hover-blue,w3-input,w3-button,input {
 						type: "submit";
 					
@@ -661,72 +618,7 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
 				}
 			}
 		}`
-	document.querySelector("#example02").setCode(`bs-jumbotron,bs-text-center,div {
-   h2 {
-      text: "My First Bootstrap Page"
-   }
-   p {
-     text: "Some Bootstrap buttons:"
-   }
-   bs-btn,bs-btn-primary,button {
-           text: "Primary"
-     }
-    bs-btn,bs-btn-success,button {
-          text: "Success"
-    }
-
-}`);
-	document.querySelector("#example03").setCode(`bs-form-horizontal,form {
-  action: "/action_page.php";
-
-  bs-form-group,div {
-    bs-control-label,bs-col-sm-2,label {
-      for: "email";
-      text: "Email:";
-    }
-    bs-col-sm-10,div {
-      bs-form-control,input {
-        type: "email";
-        id: "email";
-        placeholder: "Enter email";
-      }
-    }
-  }
-
-  bs-form-group,div {
-    bs-control-label,bs-col-sm-2,label {
-      for: "pwd";
-      text: "Password:";
-    }
-    bs-col-sm-10,div {
-      bs-form-control,input {
-        type: "password";
-        id: "pwd";
-        placeholder: "Enter password";
-      }
-    }
-  }
-
-  bs-form-group,div {
-    bs-col-sm-offset-2,bs-col-sm-10,div {
-      bs-checkbox,div {
-        label {
-          input { type: "checkbox"; }
-          text: " Remember me";
-        }
-      }
-    }
-  }
-
-  bs-form-group,div {
-    bs-col-sm-offset-2,bs-col-sm-10,div {
-      bs-btn,bs-btn-default,button {
-        type: "submit";
-        text: "Submit";
-      }
-    }
-  }
-}`);
+		
 	document.querySelector("#example01").setCode(`w3-white,w3-main,w3-panel,div { 
        style: "height: 300px";
 
@@ -737,11 +629,11 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
              class: "main-nav left clearfix";
              w3-bar,w3-text-white,div {  
                     style: "display: flex; z-index: 500; height: 200px; "
-                          w3-bar-item,w3-btn,a { text: "🏠 Home"; href: "https://dev.datafault.net"; }
-                          w3-bar-item,w3-btn,a { text: "🔒 Security"; href: "https://dev.datafault.net/security/" }
-                         w3-bar-item,w3-btn,a { text: "📝 Web Development"; href: "https://dev.datafault.net/web-development/" }
-                         w3-bar-item,w3-btn,a { text: "☁️ Hosting"; href: "https://dev.datafault.net/web-hosting/" }
-                         w3-bar-item,w3-btn,a { text: "📖 Learning"; href: "https://dev.datafault.net/learn/" }
+                          w3-bar-item,w3-btn,a { text { 🏠 Home } href: "https://dev.datafault.net"; }
+                          w3-bar-item,w3-btn,a { text { 🔒 Security } href: "https://dev.datafault.net/security/" }
+                         w3-bar-item,w3-btn,a { text { 📝 Web Development } href: "https://dev.datafault.net/web-development/" }
+                         w3-bar-item,w3-btn,a { text { ☁️ Hosting } href: "https://dev.datafault.net/web-hosting/" }
+                         w3-bar-item,w3-btn,a { text { 📖 Learning } href: "https://dev.datafault.net/learn/" }
                  }
           }
          comment: "--- end of navbar ---";
@@ -749,7 +641,7 @@ document.querySelector("#welcomeExample03qhtmlCodeBox").value = `
 
          w3-container,w3-white,div {
                 style: "height: 200px; width: 100%;";
-                text: "here's some text";
+                text { here's some text }
          }
     }
 }`);
@@ -862,9 +754,3 @@ customElements.define('code-view', CodeView);
 	</script>
 	</body>
 	</html>
-
-
-
-
-
-

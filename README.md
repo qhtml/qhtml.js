@@ -1,5 +1,7 @@
 # QHTML.js (Quick HTML)
 
+> Warning: v5.0 has changes which can break code if migrating from pre-v5.0 q-html.  If you are just upgrading q-html.js but using existing code, then please use the upgrade.html file to upgrade your q-html code to v5.0
+
 QHTML is a compact, readable way to write HTML using a CSS-like block syntax. It turns short, clean markup into real HTML at runtime, without extra boilerplate. Drop your markup inside a `<q-html>` tag, include `qhtml.js`, and the browser renders normal HTML for you.
 
 This README is written for builders who want a quick, reliable way to author UI without a heavy framework. Examples below are ready to copy and run.
@@ -8,16 +10,22 @@ This README is written for builders who want a quick, reliable way to author UI 
 
 - Write HTML structure with a clean, readable block syntax.
 - Use standard HTML attributes and event handlers.
+- Run inline `q-script { ... }` blocks with return-value replacement.
 - Inline HTML or plain text blocks where needed.
 - Build reusable runtime components with slots and methods.
 - Build compile-time templates that render to pure HTML.
 - Optional add-ons: `w3-tags.js` and `bs-tags.js` for shorthand UI markup.
 
-## v4.6 changes
+## v5.0.1-alpha changes
 
-- Added deprecation warnings in `qhtml.js` for legacy compatibility syntaxes planned for removal in v5.0.
-- Added `q-components.qhtml` bundle guidance, including modular `q-components/q-modal.qhtml` usage.
-- Updated docs for current `q-component` vs `q-template` behavior and selection guidance.
+- Added `q-script { ... }` blocks with return-value replacement and runtime DOM-bound `this`.
+- Added mixed evaluation timing for `q-script`:
+  - top-level structural use resolves during preprocessing
+  - nested use resolves at runtime after elements are attached
+- Improved component/slot runtime behavior:
+  - fixed duplicate slot projection edge cases
+  - internal `q-into` carrier nodes remain non-visual
+- Updated docs with a full `q-script` section and examples.
 
 ## Quick Start
 
@@ -78,8 +86,6 @@ HTML output:
 
 Attributes use `name: "value"` inside a block.
 
-> Note: Legacy text-property syntax such as `div { text: "some text" }` is deprecated and will be removed in v5.0. Use `text { some text }`.
-
 QHTML:
 
 ```qhtml
@@ -96,14 +102,6 @@ Runtime host output:
 
 ```html
 <a href="https://example.com" class="link">Visit Example</a>
-```
-
-Legacy/deprecated example (still accepted for compatibility, but scheduled for removal in v5.0):
-
-```qhtml
-div {
-  text: "some text";
-}
 ```
 
 ### Text and HTML and Style blocks
@@ -165,13 +163,13 @@ You can use the standard attribute form:
 ```qhtml
 <q-html>
   button {
-    onclick { "alert('Hello')" }
+    onclick: "alert('Hello')"
     text { Click me }
   }
 </q-html>
 ```
 
-all  onEvents that work in HTML work in QHTML
+And you can also use the new `on*` block syntax for cleaner event bodies with support for multiple lines and other complex javascript:
 
 QHTML:
 
@@ -234,6 +232,118 @@ Top-level host example:
 </q-html>
 ```
 
+## q-script blocks
+
+`q-script { ... }` executes JavaScript and replaces the `q-script` block with the returned value.
+
+### Evaluation timing
+
+- Top-level structural `q-script` runs during preprocessing.
+  - Use this for things like dynamic component/template ids.
+- Nested `q-script` runs at runtime, after the target element is attached.
+  - `this` is the live DOM context for that location.
+  - `this.parentElement` and `this.closest(...)` are available when the DOM supports them.
+  - `this.parent` is also provided as a convenience alias.
+
+### Rules
+
+- `q-script` must return a value.
+- Returned values are converted to strings.
+- In element child position, primitive returns (number/string) are rendered as text.
+- Returning QHTML markup (for example `div { ... }`) inserts parsed QHTML output.
+
+### Example 1: primitive text output
+
+```qhtml
+<q-html>
+  p {
+    text {
+      q-script { return "Build: " + (5 + 1) }
+    }
+  }
+</q-html>
+```
+
+Result:
+
+```html
+<p>Build: 6</p>
+```
+
+### Example 2: runtime DOM context with `closest()`
+
+```qhtml
+q-component nav-bar {
+  function randomize() { return Math.random() }
+  div { slot { content-slot } }
+}
+
+nav-bar {
+  text { q-script { return this.closest("nav-bar").randomize() } }
+}
+```
+
+Behavior:
+
+- `this` is evaluated in live runtime context.
+- The returned random number is rendered as text in the slot content.
+
+### Example 3: return QHTML markup
+
+```qhtml
+<q-html>
+  section {
+    q-script {
+      return "button.primary { text { Click me } }"
+    }
+  }
+</q-html>
+```
+
+Result:
+
+```html
+<section><button class="primary">Click me</button></section>
+```
+
+### Example 4: dynamic slot content
+
+```qhtml
+q-component card-box {
+  article {
+    h4 { slot { title } }
+    div { slot { body } }
+  }
+}
+
+card-box {
+  title { text { Runtime Title } }
+  q-script {
+    return "body { text { Generated at runtime } }"
+  }
+}
+```
+
+Behavior:
+
+- The `body` slot content is generated by `q-script`.
+- Projection still uses the component slot system.
+
+### Example 5: top-level structural id generation
+
+```qhtml
+q-component q-script { return "my-panel" } {
+  div { text { Dynamic component id } }
+}
+
+my-panel { }
+```
+
+Behavior:
+
+- The top-level `q-script` in the component header resolves during preprocessing.
+- The generated component id can be invoked normally.
+
 ## Components and templates (`q-component` vs `q-template`)
 
 QHTML has two reusable-block modes:
@@ -245,29 +355,24 @@ QHTML has two reusable-block modes:
 
 `q-component` remains a custom element in output (for valid hyphenated names), so instance methods and direct host queries work.
 
-> Note: Legacy anonymous component syntax like `q-component { id: "my-component" ... }` is deprecated and will be removed in v5.0. Use `q-component my-component { ... }`.
-
 ```qhtml
 q-component nav-bar {
   function notify() { alert("hello") }
 
   div.nav-shell {
-    h3 {
-      slot { title } /* create title slot to import content into component */
-    }
-    div.links {
-       slot { items } /* create slot named "items" */
-    }
+    h3 { slot { title } }
+    div.links { slot { items } }
   }
 }
 
 nav-bar {
   id: "main-nav"
-  title {      /* slot target */
-    text { Main Navigation } /* content  to import */
+
+  title {
+    text { Main Navigation }
   }
 
-  items { /* target slot "items" */
+  items {
     ul {
       li { text { Home } }
       li { text { Contact } }
@@ -280,8 +385,8 @@ Runtime host shape:
 
 ```html
 <nav-bar id="main-nav" q-component="nav-bar" qhtml-component-instance="1">
-  <q-into slot="title">Main Navigation</q-into>
-  <q-into slot="items"><ul><li>Home</li><li>Contact</li></ul></q-into>
+  <q-into slot="title">...</q-into>
+  <q-into slot="items">...</q-into>
 </nav-bar>
 ```
 
@@ -313,11 +418,6 @@ Runtime carrier output:
 </hello-box>
 ```
 
-is shown on the browser as:
-```html
-<div class="frame">hello</div>
-```
-
 Runtime component methods and helper APIs are documented in the `JavaScript API` section at the end of this README.
 
 ### `q-template`: compile-time pure HTML (non-traceable output)
@@ -326,7 +426,10 @@ Runtime component methods and helper APIs are documented in the `JavaScript API`
 
 ```qhtml
 q-template card-shell {
-  
+  function ignoredAtCompileTime() {
+    console.log("ignored")
+  }
+
   div.card {
     h4 { slot { heading } }
     div.body { slot { body } }
@@ -363,15 +466,11 @@ Behavior:
 - Use `q-template` for structure-only composition that should compile down to pure HTML output.
 - Default to `q-template` for reusable layout shells, then add `q-component` only where runtime behavior is required.
 
-## Slots
+## Into blocks (slot projection)
 
-Both q-component and q-template support slots, only q-component slots are accessible via the javascript API and remain as 
-custom HTML elements, so the `q-component nav-bar`  will remain as `<nav-bar>`.  Be cautious with the names of slots, if you
-happen to name a slot as the same name as a q-component or q-template, chances are you will lose one of the references 
-depending on the order that you define them in. 
-
-Note that if you want customized parts to any q-component or q-template outside of whats defined in the q-component or  q-template 
-definition, you must use a slot to include that content. 
+The `into {}` block lets you project content into a named slot without attaching
+per-child slot properties. It is a structural block (not an attribute), and
+`slot` is required. `into` targets only slot placeholders and never injects directly into components.
 
 ### Single-slot injection
 
@@ -385,7 +484,10 @@ q-component label-pill {
 }
 
 label-pill {
-   text { New }  /* automatically imports into the label slot */
+  into {
+    slot: "label"
+    text { New }
+  }
 }
 ```
 
@@ -399,36 +501,34 @@ HTML:
 
 ### Nested projection through another component
 
-This example wraps content across two components by targeting a single slot. It shows how the slots can be nested at any level since they always will be added
-to the q-component definition even if they are nested 10 levels deep they will be accessible at the top level.
+This example wraps content across two components by targeting a single slot.
 
 QHTML:
 
 ```qhtml
-
-q-component inner-component {
-  div {
-    class: "inner"
-    slot { inner-slot }
-  }
-}
-
-/* now we can use the inner slot as a target and then place a nested slot to wrap 2 components. */
-
 q-component outer-frame {
-  div.outer {
-    inner-component {
-      inner-slot {
-        slot { outer-content }
+  div {
+    class: "outer"
+    inner-box {
+      into {
+        slot: "inner"
+        slot { content }
       }
     }
   }
 }
 
+q-component inner-box {
+  div {
+    class: "inner"
+    slot { inner }
+  }
+}
 
 outer-frame {
-  outer-content {
-    p { text { Wrapped twice } } /* is imported into the inner-component */
+  into {
+    slot: "content"
+    p { text { Wrapped twice } }
   }
 }
 ```
@@ -469,8 +569,6 @@ HTML:
 
 Slot blocks accept shorthand forms:
 
-> Note: Legacy slot naming syntax `slot { name: "my-slot" }` is deprecated and will be removed in v5.0. Use `slot { my-slot }`.
-
 ```qhtml
 q-component my-component {
   slot { my-slot1 }
@@ -479,17 +577,7 @@ q-component my-component {
 }
 ```
 
-Legacy/deprecated slot naming form (v5.0 removal):
-
-```qhtml
-slot { name: "my-slot" }
-```
-
-### Legacy inline slot-property syntax (deprecated)
-
-> Note: Legacy inline slot property syntax such as `q-component my-component { div { slot: "my-slot" } }` is deprecated and will be removed in v5.0.
-
-Preferred modern approach:
+### Slot placeholders and injection
 
 ```qhtml
 q-component my-component {
@@ -499,7 +587,7 @@ q-component my-component {
 
 ### Slot injection shorthand
 
-When a component defines slots, you can import by naming a slot block directly in the instance:
+When a component defines slots, you can inject by naming a slot block directly in the instance:
 
 ```qhtml
 q-component my-component {
@@ -571,8 +659,6 @@ Recursive example:
 ```
 
 `home.qhtml` can itself contain more `q-import { ... }` blocks. The engine keeps expanding recursively until no imports remain or the 100-import safety cap is reached.
-q-imports are cached per file, so if you have a file that generates random values and you attempt to import the file more than once, you will end up with just the first set of values
-for each page load. You can avoid this by adding a ? + random string  to the import statement, which can be achieved starting in v5.0 using `q-script`.
 
 ## `q-components.qhtml` bundle
 
@@ -812,148 +898,3 @@ document.addEventListener("QHTMLContentLoaded", function () {
 
 - `function` blocks inside `q-template` are ignored (with warning).
 - Use `q-component` when you need callable methods (`.show()`, `.hide()`, custom actions, etc.).
-
-# Project Stats
-# 📊 Project Metrics Summary  
-_Source: `WHEEL.db` via `./wheel.sh`_
-
----
-
-## 🗓 Timeline
-
-- **spec_memory.created_at missing:** **152 / 152 (100%)**
-- Time-based metrics (first/last timestamp, active days, per-day throughput) — **Not computable**
-- **Sequence span:** Spec IDs **1 → 152**
-
----
-
-## 📝 Specification Activity
-
-- **Total spec entries:** **152**
-
-### Status Distribution
-- closed — **90 (59.21%)**
-- approved — **39 (25.66%)**
-- superseded — **23 (15.13%)**
-
-### Focus Areas (Top Path Prefixes)
-- into — **34 (22.37%)**
-- q_components — **33 (21.71%)**
-- demo — **20 (13.16%)**
-- q-import — **19 (12.50%)**
-- slot — **16 (10.53%)**
-
-### Recent Focus (Last 20 Spec IDs)
-- q_components — **18**
-- release — **2**
-
----
-
-## 📋 Requirements & Governance
-
-### Requirements
-- **Total:** **51**
-  - closed — **36 (70.59%)**
-  - approved — **9 (17.65%)**
-  - superseded — **6 (11.76%)**
-
-### Decisions + Constraints
-- **Total:** **43**
-  - Decisions — **7**
-  - Constraints — **36**
-
-**Combined status split:**
-- approved — **6**
-- closed — **31**
-- superseded — **6**
-
----
-
-## ❓ Question Handling
-
-- **Total questions:** **25**
-  - closed — **17 (68.00%)**
-  - superseded — **8 (32.00%)**
-  - open — **0**
-
-### Completion Gate Health
-- Open questions — **0**
-- Open req/decision/constraint rows — **0**
-
----
-
-## 🚀 Delivery & Change Management
-
-- **Total changes:** **14**
-- **Completed:** **14 / 14 (100%)**
-
-### Ratios & Coverage
-- **Spec-to-change ratio:** **10.86 spec rows per change**
-- Changes with any tracking (`change_files` or `change_defs`) — **9 / 14 (64.29%)**
-- Changes with `change_defs` entries — **4 / 14 (28.57%)**
-
----
-
-## 📚 Definition Catalog
-
-- **Total definitions:** **257**
-- **Files cataloged:** **18**
-- **Files with definitions:** **9**
-- **Average defs per file (with defs):** **28.56**
-
-### Definition Type Mix
-- function — **236**
-- component — **7**
-- const — **6**
-- class — **4**
-- method — **3**
-- property — **1**
-
-### Top Files by Definition Count
-- `qhtml.js` — **116**
-- `wheel.sh` — **55**
-- `q-editor.js` — **28**
-- `demo.html` — **25**
-- `wheel-scan.sh` — **16**
-
----
-
-## 🔗 Change Impact & Coverage
-
-- **Total change_defs rows:** **57**
-  - With `def_id` — **54**
-  - Without `def_id` — **3**
-
-### Impact Density
-- Avg defs per change (all changes) — **4.07**
-- Avg defs per tracked change (`change_defs` only) — **14.25**
-
-### Coverage
-- Unique definitions edited — **48**
-- Coverage of all defs — **18.68% (48 / 257)**
-
-### Files Touched
-- Via `change_defs` — **4**
-- Via `change_files` — **9**
-
----
-
-## 🔥 Hotspots & Concentration
-
-### Top Edited Files (by definition-touch count)
-- `qhtml.js` — **30**
-- `q-editor.js` — **22**
-- `demo.html` — **3**
-- `README.md` — **2**
-
-- **Top 3 files account for:** **96.49%** of all def touches (**55 / 57**)
-
-### Most Frequently Edited Definition
-- `transformComponentDefinitionsHelper(input)` in `qhtml.js` — **3 touches**
-
----
-
-## 📡 Process Signals
-
-- `refs` rows — **0**
-- `todo` rows — **0**

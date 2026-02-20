@@ -1,1 +1,2 @@
 q-import { q-components/q-modal.qhtml }
+q-import { q-components/q-tech-tag.qhtml }

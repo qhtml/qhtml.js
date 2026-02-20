@@ -1,14 +1,14 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v4.6
+ * v5.0.1-alpha
  *
- * 4.5 -> 4.6 quick summary:
- * - Added deprecation warnings for legacy compatibility syntaxes that are
- *   planned for removal in v5.0.
- * - README/docs now include q-components bundle guidance and current q-modal
- *   usage patterns.
- * - Component/template guidance was refreshed to clarify when to use each mode
- *   in modern QHTML projects.
+ * 5.0.1-alpha quick summary:
+ * - Added q-script evaluation support with deferred runtime execution for
+ *   nested content and structural compile-time handling for top-level cases.
+ * - Runtime q-script now binds `this` to live DOM context and supports parent
+ *   traversal patterns needed by component/slot usage.
+ * - Slot/runtime projection behavior was hardened to avoid duplicate output and
+ *   keep internal q-into carriers non-visual.
  */
 // -----------------------------------------------------------------------------
 // Top-level helper functions
@@ -53,6 +53,12 @@ function parseTagWithClasses(tag) {
     const parts = trimmed.split('.').filter(Boolean);
     const base = parts.shift() || '';
     return { base, classes: parts };
+}
+
+function isLikelyValidElementTagName(tagName) {
+    const token = String(tagName || '').trim();
+    if (!token) return false;
+    return /^[A-Za-z][A-Za-z0-9._-]*$/.test(token);
 }
 
 function mergeClassNames(existing, incoming) {
@@ -137,6 +143,297 @@ function findStandaloneKeyword(str, keyword, fromIndex = 0) {
         return idx;
     }
     return -1;
+}
+
+function extractTokenBeforeIndex(source, index) {
+    const input = String(source || '');
+    let end = Math.min(input.length, Math.max(0, Number(index) || 0)) - 1;
+    while (end >= 0 && /\s/.test(input[end])) {
+        end--;
+    }
+    if (end < 0 || !/[A-Za-z0-9_.-]/.test(input[end])) {
+        return '';
+    }
+    let start = end;
+    while (start >= 0 && /[A-Za-z0-9_.-]/.test(input[start])) {
+        start--;
+    }
+    return input.slice(start + 1, end + 1).trim();
+}
+
+function findNearestOpenBraceBeforeIndex(source, index) {
+    const input = String(source || '');
+    const end = Math.min(input.length, Math.max(0, Number(index) || 0));
+    let depth = 0;
+    for (let i = end - 1; i >= 0; i--) {
+        const ch = input[i];
+        if (ch === '}') {
+            depth++;
+            continue;
+        }
+        if (ch === '{') {
+            if (depth === 0) {
+                return i;
+            }
+            depth--;
+        }
+    }
+    return -1;
+}
+
+function findMatchingBraceWithLiterals(str, openIdx) {
+    const input = String(str || '');
+    let depth = 0;
+    let inSingle = false;
+    let inDouble = false;
+    let inBacktick = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    let escaped = false;
+
+    for (let i = openIdx; i < input.length; i++) {
+        const ch = input[i];
+        const next = input[i + 1];
+
+        if (inLineComment) {
+            if (ch === '\n' || ch === '\r') {
+                inLineComment = false;
+            }
+            continue;
+        }
+
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') {
+                inBlockComment = false;
+                i++;
+            }
+            continue;
+        }
+
+        if (inSingle) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === '\'') {
+                inSingle = false;
+            }
+            continue;
+        }
+
+        if (inDouble) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === '"') {
+                inDouble = false;
+            }
+            continue;
+        }
+
+        if (inBacktick) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === '`') {
+                inBacktick = false;
+            }
+            continue;
+        }
+
+        if (ch === '/' && next === '/') {
+            inLineComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            inBlockComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '\'') {
+            inSingle = true;
+            continue;
+        }
+        if (ch === '"') {
+            inDouble = true;
+            continue;
+        }
+        if (ch === '`') {
+            inBacktick = true;
+            continue;
+        }
+
+        if (ch === '{') {
+            depth++;
+            continue;
+        }
+        if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return i;
+            }
+            if (depth < 0) {
+                return -1;
+            }
+        }
+    }
+
+    return -1;
+}
+
+function buildQScriptParentContext(source, scriptStart, braceOpen, braceClose) {
+    const parentBraceOpen = findNearestOpenBraceBeforeIndex(source, scriptStart);
+    let parentTagToken = '';
+    if (parentBraceOpen !== -1) {
+        parentTagToken = extractTokenBeforeIndex(source, parentBraceOpen);
+    }
+    if (!parentTagToken) {
+        parentTagToken = extractTokenBeforeIndex(source, scriptStart);
+    }
+    const parsed = parseTagWithClasses(parentTagToken);
+    return {
+        tag: parsed.base || parentTagToken || '',
+        tagToken: parentTagToken || '',
+        classes: parsed.classes || [],
+        parentBraceOpen,
+        qScriptStart: scriptStart,
+        qScriptBraceOpen: braceOpen,
+        qScriptBraceClose: braceClose
+    };
+}
+
+function executeQScriptBlock(scriptBody, context, thisArg, hasExplicitThisArg = false) {
+    const body = String(scriptBody || '');
+    const hostTag = context && context.tag ? context.tag : '';
+    const boundThis = hasExplicitThisArg ? thisArg : (context || {});
+    let injectedParentAlias = false;
+    if (hasExplicitThisArg && thisArg && typeof thisArg === 'object') {
+        const parentLike = thisArg.parentElement || thisArg.parentNode || null;
+        if (!Object.prototype.hasOwnProperty.call(thisArg, 'parent')) {
+            try {
+                Object.defineProperty(thisArg, 'parent', {
+                    value: parentLike,
+                    writable: true,
+                    configurable: true
+                });
+                injectedParentAlias = true;
+            } catch (err) {
+                // ignore alias-injection failures and continue with native object shape
+            }
+        } else {
+            try {
+                thisArg.parent = parentLike;
+            } catch (err) {
+                // ignore read-only parent assignments
+            }
+        }
+    }
+    try {
+        const fn = new Function(body);
+        const result = fn.call(boundThis);
+        if (typeof result === 'undefined') {
+            componentLogger.warn(hostTag, 'q-script returned undefined; replacing block with empty output.');
+            return '';
+        }
+        if (result == null) {
+            return '';
+        }
+        return String(result);
+    } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        componentLogger.error(hostTag, `q-script execution failed: ${message}`);
+        return '';
+    } finally {
+        if (injectedParentAlias && thisArg && typeof thisArg === 'object') {
+            try {
+                delete thisArg.parent;
+            } catch (err) {
+                // ignore cleanup failures
+            }
+        }
+    }
+}
+
+function evaluateQScriptBlocks(input, options = {}) {
+    let out = String(input || '');
+    const maxPasses = Number(options.maxPasses) > 0 ? Number(options.maxPasses) : 250;
+    const topLevelOnly = !!options.topLevelOnly;
+    const wrapPrimitiveTopLevel = !!options.wrapPrimitiveTopLevel;
+    const hasExplicitThisArg = Object.prototype.hasOwnProperty.call(options, 'thisArg');
+    const explicitThisArg = options.thisArg;
+    let pass = 0;
+    while (pass < maxPasses) {
+        let changed = false;
+        let pos = 0;
+        while (true) {
+            const start = findStandaloneKeyword(out, 'q-script', pos);
+            if (start === -1) {
+                break;
+            }
+            let open = start + 'q-script'.length;
+            while (open < out.length && /\s/.test(out[open])) {
+                open++;
+            }
+            if (out[open] !== '{') {
+                pos = start + 'q-script'.length;
+                continue;
+            }
+            const close = findMatchingBraceWithLiterals(out, open);
+            if (close === -1) {
+                componentLogger.error('', 'q-script block is missing a closing brace.');
+                return out;
+            }
+            const scriptBody = out.slice(open + 1, close);
+            const context = buildQScriptParentContext(out, start, open, close);
+            if (topLevelOnly && context.parentBraceOpen !== -1) {
+                pos = start + 'q-script'.length;
+                continue;
+            }
+            let replacement = executeQScriptBlock(scriptBody, context, explicitThisArg, hasExplicitThisArg);
+            if (wrapPrimitiveTopLevel && context.parentBraceOpen === -1) {
+                const nextSlice = out.slice(close + 1);
+                const prevSlice = out.slice(0, start);
+                const nextCharMatch = nextSlice.match(/\S/);
+                const prevCharMatch = prevSlice.match(/\S(?=\s*$)/);
+                const nextChar = nextCharMatch ? nextCharMatch[0] : '';
+                const prevChar = prevCharMatch ? prevCharMatch[0] : '';
+                const replacementText = String(replacement == null ? '' : replacement).trim();
+                const looksLikeProperty = /^[A-Za-z_][\w\-.]*\s*:/.test(replacementText);
+                const shouldWrapAsText = replacementText
+                    && !looksLikeQHtmlSnippet(replacementText)
+                    && !looksLikeProperty
+                    && nextChar !== '{'
+                    && prevChar !== ':';
+                if (shouldWrapAsText) {
+                    replacement = `text { ${replacementText} }`;
+                }
+            }
+            out = out.slice(0, start) + replacement + out.slice(close + 1);
+            pos = start + replacement.length;
+            changed = true;
+        }
+        if (!changed) {
+            return out;
+        }
+        pass++;
+    }
+    componentLogger.warn('', `q-script evaluation stopped after ${maxPasses} passes; unresolved q-script blocks may remain.`);
+    return out;
 }
 
 function createRuntimeTemplateId(componentId) {
@@ -224,6 +521,9 @@ function findComponentIntoCarriers(host, slotId = '') {
         if (String(node.tagName || '').toLowerCase() !== 'q-into') {
             return;
         }
+        if (typeof node.hasAttribute === 'function' && node.hasAttribute('q-slot-anchor')) {
+            return;
+        }
         const currentName = String(node.getAttribute('slot') || '').trim();
         if (!currentName) {
             return;
@@ -274,7 +574,20 @@ function writeNodesIntoComponentAnchors(host, slotId, nodes) {
 function ensureComponentIntoCarrier(host, slotId) {
     const existing = findComponentIntoCarriers(host, slotId);
     if (existing.length) {
-        return existing[0];
+        const carrier = existing[0];
+        if (!carrier.getAttribute('q-into-carrier')) {
+            carrier.setAttribute('q-into-carrier', '1');
+        }
+        const rawStyle = String(carrier.getAttribute('style') || '');
+        const existingStyle = rawStyle.toLowerCase();
+        if (!/display\s*:\s*none/.test(existingStyle)) {
+            const normalized = rawStyle.trim();
+            const next = normalized
+                ? `${normalized}${normalized.endsWith(';') ? '' : ';'} display: none;`
+                : 'display: none;';
+            carrier.setAttribute('style', next);
+        }
+        return carrier;
     }
     if (!host || typeof document === 'undefined' || typeof host.appendChild !== 'function') {
         return null;
@@ -282,6 +595,7 @@ function ensureComponentIntoCarrier(host, slotId) {
     const carrier = document.createElement('q-into');
     carrier.setAttribute('slot', String(slotId || '').trim());
     carrier.setAttribute('q-into-carrier', '1');
+    carrier.setAttribute('style', 'display: none;');
     host.appendChild(carrier);
     return carrier;
 }
@@ -303,6 +617,9 @@ function syncGeneratedComponentSlotsFromCarriers(host) {
 
 function normalizeImplicitContentToSingleSlotCarrier(host, slotName) {
     if (!host || !slotName) {
+        return;
+    }
+    if (host.__qhtmlComponentTemplateHydrated) {
         return;
     }
     if (findComponentIntoCarriers(host).length) {
@@ -456,7 +773,10 @@ function parseQHtmlSnippetToNodes(snippet, hostForReady) {
     if (!qhtml) {
         return [];
     }
-    const encoded = encodeQuotedStrings(qhtml);
+    const runtimeInput = hostForReady
+        ? evaluateQScriptBlocks(qhtml, { topLevelOnly: true, thisArg: hostForReady })
+        : evaluateQScriptBlocks(qhtml, { topLevelOnly: true });
+    const encoded = encodeQuotedStrings(runtimeInput);
     const adjusted = addClosingBraces(encoded);
     const root = document.createElement('div');
     root.__qhtmlRoot = true;
@@ -1044,62 +1364,6 @@ function replaceBackticksWithQuotes(input) {
 }
 
 /**
- * Backward-compat pre-pass: convert legacy content/text properties into
- * canonical `text { ... }` blocks so everything flows through the unified
- * text-segment pipeline. Only converts double-quoted values.
- *
- * Examples:
- *   text: "hello";          ->  text { hello }
- *   content: "Hi <b>x</b>"; ->  text { Hi <b>x</b> }
- *   innerText: "foo";       ->  text { foo }
- */
-function replaceLegacyTextPropsWithTextBlocks(input) {
-    const legacyPropRe = /\b(?:text|content|contents|textcontent|textcontents|innertext)\b\s*:\s*"([^"]*)"\s*;/gi;
-    return input.replace(legacyPropRe, (m, val) => `text { ${val} }`);
-}
-
-/**
- * Emit one-time-per-input warnings when legacy compatibility syntaxes are
- * detected. These forms still parse today, but are scheduled for removal in
- * v5.0.
- *
- * @param {string} input Raw qhtml (pre-transform)
- */
-function warnDeprecatedCompatibilitySyntax(input) {
-    const source = String(input || '');
-    const checks = [
-        {
-            key: 'legacy-text-prop',
-            re: /\btext\b\s*:\s*"[^"]*"\s*;?/i,
-            message: 'Deprecated compatibility syntax detected (`div { text: "some text" }`). This will be removed in v5.0; use `text { ... }`.'
-        },
-        {
-            key: 'legacy-component-id-block',
-            re: /q-component\s*\{[\s\S]*?\bid\s*:\s*"[^"]+"\s*;?/i,
-            message: 'Deprecated compatibility syntax detected (`q-component { id: "my-component" ... }`). This will be removed in v5.0; use `q-component my-component { ... }`.'
-        },
-        {
-            key: 'legacy-inline-slot-prop',
-            re: /\b(?!into\b)[A-Za-z][\w.-]*\s*\{\s*[^{}]*\bslot\s*:\s*"[^"]+"\s*;?[^{}]*\}/i,
-            message: 'Deprecated compatibility syntax detected (`div { slot: "my-slot" }`). This will be removed in v5.0; use `slot { my-slot }` placeholders.'
-        },
-        {
-            key: 'legacy-slot-name-prop',
-            re: /slot\s*\{\s*name\s*:\s*"[^"]+"\s*;?\s*\}/i,
-            message: 'Deprecated compatibility syntax detected (`slot { name: "my-slot" }`). This will be removed in v5.0; use `slot { my-slot }`.'
-        }
-    ];
-    const warned = new Set();
-    checks.forEach((check) => {
-        if (!warned.has(check.key) && check.re.test(source)) {
-            warned.add(check.key);
-            componentLogger.warn('', check.message);
-        }
-    });
-}
-
-
-/**
  * URI-encode quoted segments within the qhtml.  This protects values that
  * contain special characters from interfering with parser logic.  At the
  * end of parsing the encoded values are decoded back to their original
@@ -1318,19 +1582,17 @@ function removeNestedBlocks(str) {
 
 function extractSlotNameFromBlock(inner, options = {}) {
     const { componentId = '', componentIds = [] } = options;
-    const flattened = removeNestedBlocks(inner);
-    const idMatch = flattened.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
-    const nameMatch = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
-    let slotName = '';
-    if (idMatch) {
-        slotName = idMatch[1];
-    } else if (nameMatch) {
-        slotName = nameMatch[1];
-    } else {
-        const shorthandMatch = flattened.match(/^\s*([A-Za-z0-9_-]+)\s*;?\s*$/);
-        if (shorthandMatch) {
-            slotName = shorthandMatch[1];
-        }
+    const resolvedInner = evaluateQScriptBlocks(inner, { topLevelOnly: true });
+    const flattened = removeNestedBlocks(resolvedInner);
+    if (/(?:^|\s)(?:id|name)\s*:\s*"[^"]+"\s*;?/.test(flattened)) {
+        componentLogger.error(componentId, 'Legacy slot syntax is no longer supported. Use `slot { slot-name }`.');
+        return '';
+    }
+    const shorthandMatch = flattened.match(/^\s*([A-Za-z0-9_-]+)\s*;?\s*$/);
+    const slotName = shorthandMatch ? shorthandMatch[1] : '';
+    if (!slotName && flattened.trim()) {
+        componentLogger.error(componentId, 'Invalid slot syntax. Expected `slot { slot-name }`.');
+        return '';
     }
     if (slotName && componentIds.length && componentIds.includes(slotName)) {
         componentLogger.error(componentId, `cannot name slots the same as components ("${slotName}").`);
@@ -1566,7 +1828,8 @@ function parseIntoBlock(block, componentId, position) {
         return null;
     }
     const inner = block.slice(brace + 1, close);
-    const flattened = removeNestedBlocks(inner);
+    const resolvedInner = evaluateQScriptBlocks(inner, { topLevelOnly: true });
+    const flattened = removeNestedBlocks(resolvedInner);
     const re = /([a-zA-Z_][\w\-.]*)\s*:\s*"([^"]+)"\s*;?/g;
     const props = [];
     let match;
@@ -1598,7 +1861,7 @@ function parseIntoBlock(block, componentId, position) {
     }
 
     // IntoNode shape: { targetSlot, children }
-    const cleaned = stripTopLevelProps(inner, ['slot']).trim();
+    const cleaned = stripTopLevelProps(resolvedInner, ['slot']).trim();
     return { targetSlot: slotName, children: cleaned, position };
 }
 
@@ -1767,7 +2030,7 @@ function addComponentOriginMarkers(source, componentId, options = {}) {
 
 /**
  * Replace slot placeholders in a component/template body with content provided
- * via `slotMap`.  Slot placeholders have the form `slot { name: "slotName" }`.
+ * via `slotMap`.  Slot placeholders have the form `slot { slotName }`.
  * When `preserveAnchors` is true, placeholders become stable slot-anchor
  * nodes; otherwise replacement emits pure content with no slot trace marker.
  *
@@ -1801,10 +2064,9 @@ function replaceTemplateSlots(template, slotMap, options = {}) {
             const slotContent = hasReplacement ? slotMap.get(slotName) : '';
             if (preserveAnchors) {
                 replacement = [
-                    `span {`,
+                    `q-into {`,
                     `  slot: "${escapedSlotName}";`,
                     `  q-slot-anchor: "1";`,
-                    `  style: "display: contents;";`,
                     slotContent,
                     `}`
                 ].join('\n');
@@ -1830,7 +2092,7 @@ function replaceTemplateSlots(template, slotMap, options = {}) {
 
 /**
  * Collect the names of all slot placeholders defined within a component
- * template.  The placeholders have the form `slot { name: "slotName" }`.
+ * template.  The placeholders have the form `slot { slotName }`.
  *
  * @param {string} template Component template text
  * @returns {Set<string>} A set of slot names referenced in the template
@@ -1861,28 +2123,27 @@ function collectTemplateSlotNames(template) {
 }
 
 /**
- * Parse the top-level slot directives present within a component invocation
- * block.  Directives are any property assignment whose name is `slot` or
- * terminates with `.slot`.
+ * Detect legacy top-level slot directives in a component invocation child
+ * block. Legacy directives are any property assignment whose name is `slot`
+ * or terminates with `.slot`.
  *
  * @param {string} block Component invocation block
- * @returns {Array<{property: string, value: string}>} Slot directives
+ * @returns {{property: string, value: string}|null} The first legacy directive found
  */
-function extractTopLevelSlotDirectives(block) {
+function findTopLevelLegacySlotDirective(block) {
     const brace = block.indexOf('{');
-    if (brace === -1) return [];
+    if (brace === -1) return null;
     const inner = block.slice(brace + 1, block.lastIndexOf('}'));
     const flattened = removeNestedBlocks(inner);
-    const directives = [];
     const re = /([a-zA-Z_][\w\-.]*)\s*:\s*"([^"]+)"\s*;?/g;
     let match;
     while ((match = re.exec(flattened))) {
         const propName = match[1];
         if (propName === 'slot' || propName.endsWith('.slot')) {
-            directives.push({ property: propName, value: match[2] });
+            return { property: propName, value: match[2] };
         }
     }
-    return directives;
+    return null;
 }
 
 /**
@@ -1989,58 +2250,6 @@ function extractComponentActionsAndTemplate(inner, componentId = '') {
     };
 }
 
-/**
- * Determine which component a slot directive targets and the slot name to
- * be filled.  The directive may specify the target either via the property
- * name (`component.slot: "name"`) or within the value itself
- * (`slot: "component.name"`).  If neither is provided, the current
- * component is assumed.
- *
- * @param {{property: string, value: string}} directive Slot directive descriptor
- * @param {string} defaultTarget The component assumed when no explicit target exists
- * @returns {{target: string, slotName: string}}
- */
-function resolveSlotDirectiveTarget(directive, defaultTarget) {
-    let target = '';
-    let slotName = directive.value.trim();
-    if (directive.property !== 'slot' && directive.property.endsWith('.slot')) {
-        target = directive.property.slice(0, -5);
-    }
-    const dotIndex = slotName.indexOf('.');
-    if (dotIndex !== -1) {
-        const potentialTarget = slotName.slice(0, dotIndex).trim();
-        const potentialSlot = slotName.slice(dotIndex + 1).trim();
-        if (potentialSlot) {
-            if (!target) {
-                target = potentialTarget;
-            }
-            slotName = potentialSlot;
-        }
-    }
-    if (!target) {
-        target = defaultTarget || '';
-    }
-    return { target, slotName };
-}
-
-/**
- * Remove the specified slot directives from a component invocation block.
- * Each directive is removed exactly once, preserving the remainder of the
- * block content for further processing.
- *
- * @param {string} block Component invocation block
- * @param {Array<{property: string, value: string}>} directives Directives to remove
- * @returns {string} The block without the specified directives
- */
-function removeSlotDirectivesFromBlock(block, directives) {
-    return directives.reduce((acc, directive) => {
-        const escapedName = escapeReg(directive.property);
-        const escapedValue = escapeReg(directive.value);
-        const pattern = new RegExp(`(\\s*)${escapedName}\\s*:\\s*"${escapedValue}"\\s*;?`);
-        return acc.replace(pattern, '$1');
-    }, block);
-}
-
 function addInvocationAttributesToPrimarySegment(source, options = {}) {
     if (!source) return source;
     const {
@@ -2068,7 +2277,11 @@ function buildQIntoCarriersFromSlotEntries(slotEntries) {
         if (!slotName) {
             return '';
         }
-        const parts = [`slot: "${escapeQHtmlPropString(slotName)}";`];
+        const parts = [
+            `slot: "${escapeQHtmlPropString(slotName)}";`,
+            `q-into-carrier: "1";`,
+            `style: "display: none;";`
+        ];
         const content = String(entry && entry.content ? entry.content : '').trim();
         if (content) {
             parts.push(content);
@@ -2152,13 +2365,14 @@ function transformComponentDefinitionsHelper(input) {
             if (close === -1) break;
             const header = out.slice(start, open).trim();
             const headerMatch = header.match(new RegExp(`^${keyword}\\s+([^\\s{]+)$`));
-            const headerId = headerMatch ? headerMatch[1] : '';
+            const id = headerMatch ? headerMatch[1] : '';
             const block = out.slice(start, close + 1);
             const inner = block.slice(block.indexOf('{') + 1, block.lastIndexOf('}'));
-            const flattenedInner = removeNestedBlocks(inner);
-            const idMatch = flattenedInner.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
-            const id = headerId || (idMatch ? idMatch[1] : '');
             if (!id) {
+                const flattenedInner = removeNestedBlocks(inner);
+                if (keyword === 'q-component' && /(?:^|\s)id\s*:\s*"[^"]+"\s*;?/.test(flattenedInner)) {
+                    componentLogger.error('', 'Legacy component syntax is no longer supported. Use `q-component component-id { ... }`.');
+                }
                 idx = close + 1;
                 continue;
             }
@@ -2257,7 +2471,8 @@ function transformComponentDefinitionsHelper(input) {
                 const rootAttributes = extractTopLevelInvocationAttributes(body);
                 const children = splitTopLevelSegments(body);
                 const slotEntries = [];
-                let hasSlotDirectives = false;
+                let hasSlotTagBlocks = false;
+                let hasLegacySlotDirective = false;
 
                 const intoNodes = collectIntoNodes(body, componentIds, id);
                 const hasIntoBlocks = hasTopLevelIntoBlock(body, componentIds);
@@ -2280,7 +2495,7 @@ function transformComponentDefinitionsHelper(input) {
                         continue;
                     }
                     if (slotInfo.slotNames.has(seg.tag) && !componentIds.includes(seg.tag)) {
-                        hasSlotDirectives = true;
+                        hasSlotTagBlocks = true;
                         const innerStart = seg.block.indexOf('{');
                         const innerEnd = seg.block.lastIndexOf('}');
                         const injected = innerStart !== -1 && innerEnd > innerStart
@@ -2293,44 +2508,14 @@ function transformComponentDefinitionsHelper(input) {
                         });
                         continue;
                     }
-                    const directives = extractTopLevelSlotDirectives(seg.block);
-                    if (!directives.length) continue;
-                    hasSlotDirectives = true;
-                    let handled = false;
-                    for (const directive of directives) {
-                        const { target, slotName } = resolveSlotDirectiveTarget(directive, id);
-                        if (target !== id || !slotName) {
-                            continue;
-                        }
-                        if (!slotInfo.slotNames.size) {
-                            componentLogger.warn(id, `Component does not have slot named "${slotName}".`);
-                            handled = true;
-                            break;
-                        }
-                        if (slotInfo.slotNames.size && !slotInfo.slotNames.has(slotName)) {
-                            componentLogger.error(id, `Content was provided for unknown slot "${slotName}".`);
-                            handled = true;
-                            break;
-                        }
-                        const cleanedBlock = removeSlotDirectivesFromBlock(seg.block, [directive]).trim();
-                        slotEntries.push({
-                            slotName,
-                            content: cleanedBlock,
-                            position: typeof seg.start === 'number' ? seg.start : 0
-                        });
-                        handled = true;
-                        break;
-                    }
-                    if (!handled && directives.length) {
-                        const directive = directives[0];
-                        const { target } = resolveSlotDirectiveTarget(directive, id);
-                        if (target && target !== id) {
-                            componentLogger.warn(id, `Encountered slot directive targeting "${target}". Nested component slot assignment is left untouched.`);
-                        }
+                    const legacyDirective = findTopLevelLegacySlotDirective(seg.block);
+                    if (legacyDirective) {
+                        hasLegacySlotDirective = true;
+                        componentLogger.error(id, 'Legacy inline slot assignment is no longer supported. Use `slot-name { ... }` child blocks.');
                     }
                 }
 
-                const hasExplicitSlotUsage = hasIntoBlocks || hasSlotDirectives || slotEntries.length > 0;
+                const hasExplicitSlotUsage = hasIntoBlocks || hasSlotTagBlocks || hasLegacySlotDirective || slotEntries.length > 0;
                 if (!hasExplicitSlotUsage && singleSlotName) {
                     const autoContent = children
                         .filter((seg) => seg.tag !== 'into' && seg.tag !== 'q-into')
@@ -2462,9 +2647,11 @@ function extractPropertiesAndChildren(input) {
 
   // Per-segment helpers
   const beginHtml = (tag) => {
-    currentSegment = { type: 'html', tag, content: '', _buf: [] };
+    currentSegment = { type: 'html', tag, content: '', _buf: [], _htmlDepth: 1 };
   };
   const appendHtml = (ch) => currentSegment && currentSegment._buf.push(ch);
+  const incHtmlDepth = () => { if (currentSegment) currentSegment._htmlDepth++; };
+  const decHtmlDepth = () => { if (currentSegment) currentSegment._htmlDepth--; };
   const endHtml = () => {
     currentSegment.content = encodeURIComponent(currentSegment._buf.join(''));
     segments.push(currentSegment);
@@ -2497,9 +2684,11 @@ function extractPropertiesAndChildren(input) {
 
   // NEW: text segment helpers (mirrors html, but we will decode to a text node)
   const beginText = (tag) => {
-    currentSegment = { type: 'text', tag, content: '', _buf: [] };
+    currentSegment = { type: 'text', tag, content: '', _buf: [], _textDepth: 1 };
   };
   const appendText = (ch) => currentSegment && currentSegment._buf.push(ch);
+  const incTextDepth = () => { if (currentSegment) currentSegment._textDepth++; };
+  const decTextDepth = () => { if (currentSegment) currentSegment._textDepth--; };
   const endText = () => {
     // For symmetry with html/css we URI-encode; will decode at render time.
     currentSegment.content = encodeURIComponent(currentSegment._buf.join(''));
@@ -2533,15 +2722,26 @@ function extractPropertiesAndChildren(input) {
   for (let i = 0; i < input.length; i++) {
     // Inside inline HTML
     if (currentSegment && currentSegment.type === 'html') {
-      if (input[i] === '}') {
-        // End of HTML block: close the segment and decrement nesting level
-        endHtml();
-        nestedLevel--;
-        // After closing an inline HTML block at this level, process the rest of the input
-        const rest = input.substring(i + 1);
-        return segments.concat(extractPropertiesAndChildren(rest));
+      const ch = input[i];
+      if (ch === '{') {
+        incHtmlDepth();
+        appendHtml(ch);
+        continue;
       }
-      appendHtml(input[i]);
+      if (ch === '}') {
+        decHtmlDepth();
+        if (currentSegment._htmlDepth === 0) {
+          // End of HTML block: close the segment and decrement nesting level
+          endHtml();
+          nestedLevel--;
+          // After closing an inline HTML block at this level, process the rest of the input
+          const rest = input.substring(i + 1);
+          return segments.concat(extractPropertiesAndChildren(rest));
+        }
+        appendHtml(ch);
+        continue;
+      }
+      appendHtml(ch);
       continue;
     }
 
@@ -2597,15 +2797,26 @@ function extractPropertiesAndChildren(input) {
 
     // Inside inline TEXT
     if (currentSegment && currentSegment.type === 'text') {
-      if (input[i] === '}') {
-        // End of text block: close the segment and decrement nesting level
-        endText();
-        nestedLevel--;
-        // After closing an inline TEXT block at this level, process the rest of the input
-        const rest = input.substring(i + 1);
-        return segments.concat(extractPropertiesAndChildren(rest));
+      const ch = input[i];
+      if (ch === '{') {
+        incTextDepth();
+        appendText(ch);
+        continue;
       }
-      appendText(input[i]);
+      if (ch === '}') {
+        decTextDepth();
+        if (currentSegment._textDepth === 0) {
+          // End of text block: close the segment and decrement nesting level
+          endText();
+          nestedLevel--;
+          // After closing an inline TEXT block at this level, process the rest of the input
+          const rest = input.substring(i + 1);
+          return segments.concat(extractPropertiesAndChildren(rest));
+        }
+        appendText(ch);
+        continue;
+      }
+      appendText(ch);
       continue;
     }
 
@@ -2648,6 +2859,10 @@ function extractPropertiesAndChildren(input) {
         if (tag === 'css')  { beginCss(tag); continue; }
         if (tag === 'text') { beginText(tag); continue; }
         if (tag === 'style') { beginStyleBlock(tag); continue; }
+        if (/^function\s+[A-Za-z_$][\w$]*\s*\([^)]*\)$/.test(tag)) {
+          currentSegment = { type: 'function-def', tag, content: '' };
+          continue;
+        }
 
         // default element
         currentSegment = { type: 'element', tag, content: '' };
@@ -2717,6 +2932,7 @@ function processTextSegment(segment, parentElement) {
   } catch {
     textString = segment.content;
   }
+  textString = evaluateQScriptBlocks(textString, { thisArg: parentElement });
   // Insert as a pure text node (no wrapper, no HTML parsing)
   parentElement.appendChild(document.createTextNode(textString));
 }
@@ -2754,9 +2970,9 @@ function flushReadyLifecycleHooks(parentElement, fallbackThis) {
 
 
 /**
- * Process a property segment.  Handles static properties, content/text
- * assignments and dynamic JavaScript functions.  Event handler properties
- * are assigned directly to the parent element.
+ * Process a property segment. Handles static and dynamic JavaScript-valued
+ * properties. Event handler properties are assigned directly to the parent
+ * element.
  *
  * @param {object} segment The property segment descriptor
  * @param {HTMLElement} parentElement The DOM element receiving the property
@@ -2787,16 +3003,7 @@ function processPropertySegment(segment, parentElement) {
         }
         try {
             const fn = new Function(fnBody);
-            if (propNameLower === 'content' || propNameLower === 'contents' || propNameLower === 'text' || propNameLower === 'textcontent' || propNameLower === 'textcontents' || propNameLower === 'innertext') {
-                let result;
-                try {
-                    result = fn.call(parentElement);
-                } catch (err) {
-                    console.error('Error executing function for property', propNameRaw, err);
-                    result = '';
-                }
-                parentElement.innerHTML = result;
-            } else if (/^on\w+/i.test(propNameRaw)) {
+            if (/^on\w+/i.test(propNameRaw)) {
                 const handler = function(event) {
                     try {
                         return fn.call(this, event);
@@ -2823,14 +3030,11 @@ function processPropertySegment(segment, parentElement) {
             console.error('Failed to compile function for property', segment.name, err);
         }
     } else {
-        if (propNameLower === 'content' || propNameLower === 'contents' || propNameLower === 'text' || propNameLower === 'textcontent' || propNameLower === 'textcontents' || propNameLower === 'innertext') {
-            parentElement.innerHTML = decodeURIComponent(segment.value);
+        const resolvedValue = evaluateQScriptBlocks(segment.value, { thisArg: parentElement });
+        if (propNameLower === 'class') {
+            mergeClassAttribute(parentElement, resolvedValue);
         } else {
-            if (propNameLower === 'class') {
-                mergeClassAttribute(parentElement, segment.value);
-            } else {
-                parentElement.setAttribute(propNameRaw, segment.value);
-            }
+            parentElement.setAttribute(propNameRaw, resolvedValue);
         }
     }
 }
@@ -2848,7 +3052,12 @@ function processElementSegment(segment, parentElement) {
         const { base, classes } = parseTagWithClasses(tagName);
         const regex = /<(\w+)[\s>]/;
         const match = base.match(regex);
-        const element = document.createElement(match ? match[1].toLowerCase() : base);
+        const resolvedTag = match ? match[1].toLowerCase() : base;
+        if (!isLikelyValidElementTagName(resolvedTag)) {
+            componentLogger.error('', `Skipping invalid element tag token "${tagName}".`);
+            return { element: null, classes, base };
+        }
+        const element = document.createElement(resolvedTag);
         if (classes.length) {
             mergeClassAttribute(element, classes.join(' '));
         }
@@ -2860,11 +3069,19 @@ function processElementSegment(segment, parentElement) {
         let innermostClasses = [];
         tags.forEach(tag => {
             const created = createElementFromTag(tag);
+            if (!created.element) {
+                return;
+            }
             currentParent.appendChild(created.element);
             currentParent = created.element;
             innermostClasses = created.classes;
         });
-        const childSegments = extractPropertiesAndChildren(segment.content);
+        const resolvedContent = evaluateQScriptBlocks(segment.content, {
+            topLevelOnly: true,
+            thisArg: currentParent,
+            wrapPrimitiveTopLevel: true
+        });
+        const childSegments = extractPropertiesAndChildren(resolvedContent);
         childSegments.forEach(childSegment => processSegment(childSegment, currentParent));
         if (innermostClasses.length) {
             mergeClassAttribute(currentParent, innermostClasses.join(' '));
@@ -2872,6 +3089,9 @@ function processElementSegment(segment, parentElement) {
         flushReadyLifecycleHooks(currentParent);
     } else {
         const created = createElementFromTag(segment.tag);
+        if (!created.element) {
+            return;
+        }
         const newElement = created.element;
         const tagName = created.base;
         if (tagName === 'script' || tagName === 'q-painter') {
@@ -2879,12 +3099,18 @@ function processElementSegment(segment, parentElement) {
             newElement.text = segment.content;
             parentElement.appendChild(newElement);
         } else {
-            const childSegments = extractPropertiesAndChildren(segment.content);
+            // Attach first so q-script runtime this can traverse parent/closest.
+            parentElement.appendChild(newElement);
+            const resolvedContent = evaluateQScriptBlocks(segment.content, {
+                topLevelOnly: true,
+                thisArg: newElement,
+                wrapPrimitiveTopLevel: true
+            });
+            const childSegments = extractPropertiesAndChildren(resolvedContent);
             childSegments.forEach(childSegment => processSegment(childSegment, newElement));
             if (created.classes.length) {
                 mergeClassAttribute(newElement, created.classes.join(' '));
             }
-            parentElement.appendChild(newElement);
             flushReadyLifecycleHooks(newElement);
         }
     }
@@ -2904,6 +3130,7 @@ function processHtmlSegment(segment, parentElement) {
     } catch {
         htmlString = segment.content;
     }
+    htmlString = evaluateQScriptBlocks(htmlString, { thisArg: parentElement });
     const tempContainer = document.createElement('div');
     tempContainer.innerHTML = htmlString;
     while (tempContainer.firstChild) {
@@ -2936,7 +3163,7 @@ function processStyleBlockSegment(segment, parentElement) {
         return;
     }
 
-    const content = segment.content;
+    const content = evaluateQScriptBlocks(segment.content, { thisArg: parentElement });
 
     if (parentElement.__qhtmlRoot) {
         const styleElement = document.createElement('style');
@@ -2973,6 +3200,10 @@ function processSegment(segment, parentElement) {
         processPropertySegment(segment, parentElement);
     } else if (segment.type === 'element') {
         processElementSegment(segment, parentElement);
+    } else if (segment.type === 'function-def') {
+        // Function definition blocks should be consumed by component transforms.
+        // Ignore gracefully if one leaks into runtime parsing.
+        return;
     } else if (segment.type === 'html') {
         processHtmlSegment(segment, parentElement);
     } else if (segment.type === 'css') {
@@ -3099,662 +3330,40 @@ class QHtmlElement extends HTMLElement {
 
     preprocessAfterImports(importResolvedQhtml) {
         let input = importResolvedQhtml;
+        // Evaluate only top-level q-script blocks here so component/template
+        // structure can still be compiled; nested q-script runs later with DOM this.
+        input = evaluateQScriptBlocks(input, { topLevelOnly: true });
         input = stripBlockComments(input);
-        warnDeprecatedCompatibilitySyntax(input);
         input = addSemicolonToProperties(input);
         input = replaceBackticksWithQuotes(input);
-        input = replaceLegacyTextPropsWithTextBlocks(input);
         return transformComponentDefinitionsHelper(input);
     }
 
-// unused for now
-// --- replace the existing transformComponentDefinitions with this version ---
-transformComponentDefinitions(input) {
-        // Delegate to top-level helper for expanding q-component definitions.
-        // The original implementation remains in place below this line for
-        // reference but is bypassed by this early return.
+    transformComponentDefinitions(input) {
         return transformComponentDefinitionsHelper(input);
-        // 1) Extract all q-component blocks with balanced braces
-    const defs = []; // { id, template }   (template = inner qhtml of the component)
-    let out = input;
-    let idx = 0;
-
-    while (true) {
-        const start = out.indexOf('q-component', idx);
-        if (start === -1) break;
-
-        const open = out.indexOf('{', start);
-        if (open === -1) break;
-
-        const close = findMatchingBrace(out, open);
-        if (close === -1) break;
-
-        const block = out.slice(start, close + 1);
-        const inner = block.slice(block.indexOf('{') + 1, block.lastIndexOf('}'));
-
-        // pull id: "..."
-        const idMatch = inner.match(/(?:^|\s)id\s*:\s*"([^"]+)"\s*;?/);
-        if (idMatch) {
-            const id = idMatch[1];
-
-            // component template is the inner content with top-level id:/slots: removed
-            const template = stripTopLevelProps(inner, ['id', 'slots']).trim();
-
-            defs.push({ id, template });
-
-            // remove the whole q-component block from the document
-            out = out.slice(0, start) + out.slice(close + 1);
-            // move idx back a bit to catch adjacent content safely
-            idx = Math.max(0, start - 1);
-        } else {
-            // no id? skip it safely
-            idx = close + 1;
-        }
     }
 
-    // 2) For each component def, expand invocations:  my-comp { ... }  ->  template with slots filled
-    for (const { id, template } of defs) {
-        let pos = 0;
-        while (true) {
-            // find <id> { ... }
-            const k = findTagInvocation(out, id, pos);
-            if (!k) break;
-
-            const { tagStart, braceOpen, braceClose } = k;
-            const body = out.slice(braceOpen + 1, braceClose);
-
-            // Get top-level child segments of the invocation body (e.g., div { ... }, span { ... }, html { ... })
-            const children = splitTopLevelSegments(body); // [{tag, block}]  where block is the full 'tag { ... }'
-
-            // Build slot->content mapping from children that have a top-level `slot: "name"` property
-            const slotMap = new Map();
-            for (const seg of children) {
-                const slotName = extractTopLevelSlotName(seg.block);
-                if (!slotName) continue;
-
-                // strip the 'slot: "name";' property from the child block for clean injection
-                const cleaned = stripTopLevelProps(seg.block, ['slot']).trim();
-                const existing = slotMap.get(slotName) || '';
-                slotMap.set(slotName, existing + '\n' + cleaned);
-            }
-
-            // Replace template slots:  slot { name: "slot-1" }  with mapped content (or nothing)
-            const expanded = replaceTemplateSlots(template, slotMap);
-
-            // Replace the invocation in the source with the expanded template
-            out = out.slice(0, tagStart) + expanded + out.slice(braceClose + 1);
-
-            // Continue scanning after the inserted template
-            pos = tagStart + expanded.length;
-        }
-    }
-
-    return out;
-
-    // ---------- helpers (scoped inside the same object for minimal diff) ----------
-
-    // find the index of the matching '}' for the '{' at openIdx (supports nesting)
-    function findMatchingBrace(str, openIdx) {
-        let depth = 0;
-        for (let i = openIdx; i < str.length; i++) {
-            const ch = str[i];
-            if (ch === '{') depth++;
-            else if (ch === '}') {
-                depth--;
-                if (depth === 0) return i;
-            }
-        }
-        return -1;
-    }
-
-    // strip specific top-level properties (e.g., id, slots, slot) from a block content
-    // Note: only removes occurrences that are at top-level (not inside nested braces)
-    function stripTopLevelProps(blockContent, propNames) {
-        let out = '';
-        let i = 0, depth = 0, tokenStart = 0;
-
-        // Quick-pass removal using regex for each prop while guarding top-level with a manual scan.
-        // Strategy: split by semicolons at top level, filter props, then rejoin.
-        const parts = [];
-        let cur = '';
-        while (i < blockContent.length) {
-            const ch = blockContent[i];
-            if (ch === '{') { depth++; cur += ch; i++; continue; }
-            if (ch === '}') { depth--; cur += ch; i++; continue; }
-            if (ch === ';' && depth === 0) {
-                parts.push(cur + ';');
-                cur = '';
-                i++;
-                continue;
-            }
-            cur += ch;
-            i++;
-        }
-        if (cur.trim()) parts.push(cur);
-
-        const keep = parts.filter(p => {
-            const m = p.match(/^\s*([a-zA-Z_][\w\-]*)\s*:/);
-            if (!m) return true;
-            return !propNames.includes(m[1]);
+    parseQHtml(qhtml) {
+        const runtimeInput = evaluateQScriptBlocks(qhtml, {
+            topLevelOnly: true,
+            thisArg: this
         });
+        const preprocessedInput = encodeQuotedStrings(runtimeInput);
+        const adjustedInput = addClosingBraces(preprocessedInput);
+        const root = document.createElement('div');
+        root.__qhtmlRoot = true;
+        root.__qhtmlHost = this;
 
-        return keep.join('').trim();
-    }
-
-    // locate `id { ... }` treating id as a tag-like token followed by a balanced block
-    function findTagInvocation(str, id, fromIndex) {
-        // ensure the id is a standalone tag token immediately before a '{'
-        // allow leading whitespace and line breaks
-        const re = new RegExp(`(^|[^\\w-])(${escapeReg(id)})\\s*\\{`, 'g');
-            re.lastIndex = fromIndex || 0;
-            const m = re.exec(str);
-            if (!m) return null;
-
-            const braceOpen = m.index + m[0].lastIndexOf('{');
-            const tagStart = m.index + (m[1] ? 1 : 0);
-            const braceClose = findMatchingBrace(str, braceOpen);
-            if (braceClose === -1) return null;
-
-            return { tagStart, braceOpen, braceClose };
-        }
-
-        function escapeReg(s) {
-            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        }
-
-        // split top-level segments like:   div { ... }  span { ... }  html { ... }
-        function splitTopLevelSegments(body) {
-            const segs = [];
-            let i = 0;
-            while (i < body.length) {
-                // skip whitespace
-                while (i < body.length && /\s/.test(body[i])) i++;
-                if (i >= body.length) break;
-
-                // read tag token up to '{' or ':'
-                let j = i;
-                while (j < body.length && !/[{:]/.test(body[j])) j++;
-                    const token = body.slice(i, j).trim();
-                    if (!token) break;
-
-                    if (body[j] === '{') {
-                        const open = j;
-                        const close = findMatchingBrace(body, open);
-                        if (close === -1) break;
-                        const block = `${token} ${body.slice(open, close + 1)}`;
-                        segs.push({ tag: token, block });
-                        i = close + 1;
-                    } else {
-                        // property (not a child element) — skip to next semicolon at top-level
-                        // This is not a child element; leave it as-is
-                        const semi = body.indexOf(';', j);
-                        if (semi === -1) break;
-                        i = semi + 1;
-                    }
-                }
-                return segs;
-            }
-
-            // read a top-level slot name property from a child block:  <tag> { slot: "name"; ... }
-            function extractTopLevelSlotName(block) {
-                // block looks like:  tag { ... }
-                const brace = block.indexOf('{');
-                if (brace === -1) return '';
-                const inner = block.slice(brace + 1, block.lastIndexOf('}'));
-                // Only inspect top-level; trivial approach: remove nested blocks first
-                const flattened = removeNestedBlocks(inner);
-                const m = flattened.match(/(?:^|\s)slot\s*:\s*"([^"]+)"\s*;?/);
-                return m ? m[1] : '';
-            }
-
-            function removeNestedBlocks(str) {
-                let out = '';
-                let depth = 0;
-                for (let i = 0; i < str.length; i++) {
-                    const ch = str[i];
-                    if (ch === '{') { depth++; continue; }
-                    if (ch === '}') { depth--; continue; }
-                    if (depth === 0) out += ch;
-                }
-                return out;
-            }
-
-            // Replace all template slot placeholders:  slot { name: "slot-1" ... }  -> slotMap.get('slot-1') || ''
-            function replaceTemplateSlots(template, slotMap) {
-                let result = template;
-                let pos = 0;
-
-                while (true) {
-                    // find a 'slot {'
-                    const s = findStandaloneKeyword(result, 'slot', pos);
-                    if (s === -1) break;
-
-                    // ensure followed by '{' (allow whitespace)
-                    let k = s + 4;
-                    while (k < result.length && /\s/.test(result[k])) k++;
-                    if (result[k] !== '{') { pos = s + 4; continue; }
-
-                    const open = k;
-                    const close = findMatchingBrace(result, open);
-                    if (close === -1) break;
-
-                    const slotBlock = result.slice(s, close + 1);
-                    const inner = result.slice(open + 1, close);
-
-                    // flatten top-level to find name:""
-                    const flattened = removeNestedBlocks(inner);
-                    const m = flattened.match(/(?:^|\s)name\s*:\s*"([^"]+)"\s*;?/);
-                    const slotName = m ? m[1] : '';
-
-                    // replace whole slot block
-                    const replacement = slotName && slotMap.has(slotName) ? slotMap.get(slotName) : '';
-                    result = result.slice(0, s) + replacement + result.slice(close + 1);
-                    pos = s + replacement.length;
-                }
-                return result;
-            }
-        }
-
-
-        //parse all text and convert this element's contents into HTML
-        parseQHtml(qhtml) {
-        // Use the refactored pipeline to convert qhtml into HTML.  The
-        // preprocessed input is encoded, balanced for braces, broken into
-        // segments and then assembled into a DOM tree via helper functions.
-        const _preprocessedInput = encodeQuotedStrings(qhtml);
-        const _adjustedInput = addClosingBraces(_preprocessedInput);
-        const _root = document.createElement('div');
-        _root.__qhtmlRoot = true;
-        _root.__qhtmlHost = this;
-        // Always use the top-level extract/process helpers rather than any nested versions
-        const _extract = (typeof window !== 'undefined' && window.extractPropertiesAndChildren) ? window.extractPropertiesAndChildren : extractPropertiesAndChildren;
-        const _process = (typeof window !== 'undefined' && window.processSegment) ? window.processSegment : processSegment;
-        const _segments = _extract(_adjustedInput);
-        _segments.forEach(seg => _process(seg, _root));
-        flushReadyLifecycleHooks(_root, _root.__qhtmlHost || _root);
-        return _root.outerHTML;
-
-            // Function to find the matching closing brace for each opening brace and add closing braces accordingly
-            function addClosingBraces(input) {
-                let depth = 0;
-                let result = '';
-
-                for (let i = 0; i < input.length; i++) {
-                    if (input[i] === '{') {
-                        depth++;
-                    } else if (input[i] === '}') {
-                        depth--;
-                        if (depth < 0) {
-                            result += '} '.repeat(-depth); // Add extra closing braces as needed
-                            depth = 0;
-                        }
-                    }
-                    result += input[i];
-                }
-
-                return result + '} '.repeat(depth); // Add any remaining closing braces at the end
-            }
-
-            function preprocess(i_qhtml) {
-                const regex = /"{1}([^\"]*)"{1}/mg;
-
-                // Alternative syntax using RegExp constructor
-                // const regex = new RegExp('[^\\:]+:[^\\"]+"{1}(1:[^\\"]*)"{1}', 'mg')
-
-
-                let m;
-                var new_qhtml = i_qhtml.replace(regex, (match, p1) => `"${encodeURIComponent(p1)}"`);
-                while ((m = regex.exec(i_qhtml)) !== null) {
-                    // This is necessary to avoid infinite loops with zero-width matches
-                    if (m.index === regex.lastIndex) {
-                        regex.lastIndex++;
-                    }
-
-                    // The result can be accessed through the `m`-variable.
-                    //console.log(m);
-                    m.forEach((match, groupIndex) => {
-
-                        //		console.log(`Found	 match, group ${groupIndex}: ${match}`);
-
-
-                    });
-
-                }
-
-                return new_qhtml;
-            }
-            const preprocessedInput = preprocess(qhtml);
-            const adjustedInput = addClosingBraces(preprocessedInput);
-
-            function extractPropertiesAndChildren(input) {
-                const segments = [];
-                let nestedLevel = 0;
-                let segmentStart = 0;
-                let currentProperty = null;
-                var isHTML = false;
-                var isCSS = false;
-                var cssNestingLevel = 0;
-                var htmlString = "";
-
-                for (let i = 0; i < input.length; i++) {
-                    if (isHTML) {
-                        if (input[i] === "}") {
-                            isHTML = false;
-                            currentProperty.content = encodeURIComponent(htmlString);
-                            segments.push(currentProperty);
-                            currentProperty = null;
-                            //htmlString = "";
-                            // NOTE: do NOT mutate `input` here; allow the for-loop to continue naturally
-                            // The loop will advance past this '}' and keep scanning the remaining siblings.
-                            continue;
-                        } else {
-                            htmlString += input[i];
-                            continue;
-                        }
-                    }
-                    if (isCSS) {
-                        if (input[i] === "}") {
-                            cssNestingLevel--;
-                            if (cssNestingLevel == 0) {
-                                isCSS = false;
-                                currentProperty.content = encodeURIComponent(htmlString);
-                                segments.push(currentProperty);
-                                currentProperty = null;
-
-                                // Reset input to process remaining elements/properties
-                                input = input.substring(i + 1);
-                                i = -1; // Reset loop index
-                                continue;
-                            } else {
-                                input = input.substring(i + 1);
-                                i = -1; // Reset loop index
-                                htmlString = htmlString.concat(input[i] ?? "");
-                            }
-                        } else {
-                            if (input[i] === "{") {
-                                cssNestingLevel++;
-                                continue;
-
-                            } else {
-                                htmlString = htmlString.concat(input[i]);
-                                continue;
-                            }
-                        }
-                    } else {
-                        if (input[i] === "{") {
-                            nestedLevel++;
-                            if (nestedLevel === 1) {
-                                segmentStart = i + 1; // Start after the opening brace
-                                const tag = input.substring(0, i).trim();
-                                if (tag === "html") {
-
-                                    currentProperty = {
-                                        type: 'html',
-                                        tag,
-                                        content: ''
-                                    };
-                                    isHTML = true;
-                                    htmlString = "";
-                                    continue;
-                                } else if (tag === "css") {
-                                    currentProperty = {
-                                        type: 'css',
-                                        tag,
-                                        content: ''
-                                    };
-                                    isCSS = true; // (fixed)
-                                    cssNestingLevel = 1;
-                                    htmlString = "";
-                                    continue;
-
-                                } else {
-                                    currentProperty = {
-                                        type: 'element',
-                                        tag,
-                                        content: ''
-                                    };
-                                }
-                            }
-                        } else if (input[i] === "}") {
-                            nestedLevel--;
-                            if (nestedLevel === 0 && currentProperty !== null) {
-                                // When closing an element, add its content and reset currentProperty
-                                currentProperty.content = input.substring(segmentStart, i).trim();
-                                segments.push(currentProperty);
-                                currentProperty = null;
-
-                                // Reset input to process remaining elements/properties
-                                input = input.substring(i + 1).trim();
-                                i = -1; // Reset loop index
-                            }
-                        } else if (nestedLevel === 0 && input[i] === ":") {
-                            // Handle properties only at the root level (nestedLevel === 0)
-                            // Extract the property name and the remainder of the input after the colon
-                            const propName = input.substring(0, i).trim();
-                            let remainder = input.substring(i + 1).trim();
-                            // If the remainder begins with a function block (enclosed in braces),
-                            // parse until the matching closing brace instead of to the next semicolon.
-                            if (remainder.startsWith('{')) {
-                                let braceCount = 0;
-                                let endIndex = 0;
-                                for (let j = 0; j < remainder.length; j++) {
-                                    const ch = remainder[j];
-                                    if (ch === '{') {
-                                        braceCount++;
-                                    } else if (ch === '}') {
-                                        braceCount--;
-                                        // When braceCount returns to 0, we've found the end of the function body
-                                        if (braceCount === 0) {
-                                            endIndex = j;
-                                            break;
-                                        }
-                                    }
-                                }
-                                // Extract the function body (without the outer braces)
-                                const fnBody = remainder.substring(1, endIndex).trim();
-                                // Skip past the closing brace and any following semicolon
-                                let skipIndex = endIndex + 1;
-                                if (remainder[skipIndex] === ';') {
-                                    skipIndex++;
-                                }
-                                // Push a property segment marked as a function
-                                segments.push({
-                                    type: 'property',
-                                    name: propName,
-                                    value: fnBody,
-                                    isFunction: true
-                                });
-                                // Remove the parsed portion from input and restart parsing
-                                input = remainder.substring(skipIndex).trim();
-                                i = -1;
-                            } else {
-                                // Regular property value ends at the next semicolon
-                                let propEnd = remainder.indexOf(";");
-                                if (propEnd !== -1) {
-                                    let propertyValue = remainder.substring(0, propEnd).trim();
-                                    // Remove surrounding quotes if present
-                                    propertyValue = propertyValue.replace(/^"/, '').replace(/"$/, '');
-                                    segments.push({
-                                        type: 'property',
-                                        name: propName,
-                                        value: propertyValue
-                                    });
-                                    // Adjust the remaining input and restart the loop
-                                    input = remainder.substring(propEnd + 1).trim();
-                                    i = -1;
-                                }
-                            }
-                        }
-                    }
-                }
-                console.log(JSON.stringify(segments))
-                return segments;
-            }
-
-            function processSegment(segment, parentElement) {
-                if (segment.type === 'property') {
-                    // If this property contains a JavaScript function definition, evaluate accordingly
-                    if (segment.isFunction) {
-                        // Retrieve the stored function body. It may contain percent-encoded
-                        // segments due to earlier preprocessing, so decode them before
-                        // constructing the function. If decoding fails, fall back to
-                        // the raw body.
-                        let fnBody = segment.value;
-                        try {
-                            fnBody = decodeURIComponent(fnBody);
-                        } catch (e) {
-                            // Use original if decoding fails.
-                        }
-                        try {
-                            // Create the function from the body
-                            const fn = new Function(fnBody);
-                            const propName = segment.name;
-                            // Content/text properties: call the function and assign the return value to innerHTML
-                            if (propName === 'content' || propName === 'contents' || propName === 'text' || propName === 'textcontent' || propName === 'textcontents' || propName === 'innertext') {
-                                let result;
-                                try {
-                                    result = fn.call(parentElement);
-                                } catch (err) {
-                                    console.error('Error executing function for property', propName, err);
-                                    result = '';
-                                }
-                                parentElement.innerHTML = result;
-                            } else if (/^on\w+/i.test(propName)) {
-                                // Event handler properties: assign a function that invokes the provided body
-                                const handler = function(event) {
-                                    try {
-                                        return fn.call(this, event);
-                                    } catch (err) {
-                                        console.error('Error executing event handler for', propName, err);
-                                    }
-                                };
-                                parentElement[propName.toLowerCase()] = handler;
-                            } else {
-                                // Other attributes: call the function and assign its return value as attribute
-                                let result;
-                                try {
-                                    result = fn.call(parentElement);
-                                } catch (err) {
-                                    console.error('Error executing function for property', propName, err);
-                                    result = '';
-                                }
-                                parentElement.setAttribute(propName, result);
-                            }
-                        } catch (err) {
-                            console.error('Failed to compile function for property', segment.name, err);
-                        }
-                    } else {
-                        // Regular property handling
-                        if (segment.name === 'content' || segment.name === 'contents' || segment.name === 'text' || segment.name === 'textcontent' || segment.name === 'textcontents' || segment.name === 'innertext') {
-                            parentElement.innerHTML = decodeURIComponent(segment.value);
-                        } else {
-                            if (segment.name === 'style' || segment.name === 'script' || segment.name === 'q-painter' || segment.name === 'css') {
-                                parentElement.setAttribute(segment.name, segment.value);
-
-                            } else {
-
-                                parentElement.setAttribute(segment.name, segment.value);
-                            }
-                        }
-                    }
-                } else if (segment.type === 'element') {
-                    if (segment.tag.includes(',')) {
-                        // Split the tag by comma and trim each tag name
-                        const tags = segment.tag.split(',').map(tag => tag.trim());
-                        // Recursively create nested elements for each tag
-                        let currentParent = parentElement;
-                        tags.forEach(tag => {
-                            function getTagNameFromHTML(htmlSnippet) {
-                                var regex = /<(\w+)[\s>]/;
-                                var match = htmlSnippet.match(regex);
-                                return match ? match[1].toLowerCase() : '';
-                            }
-                            const newElement = document.createElement(getTagNameFromHTML(tag) === '' ? tag : getTagNameFromHTML(tag));
-                            currentParent.appendChild(newElement);
-                            currentParent = newElement; // Update the current parent to the newly created element
-
-                        });
-                        const childSegments = extractPropertiesAndChildren(segment.content);
-                        childSegments.forEach(childSegment => processSegment(childSegment, currentParent));
-                    } else {
-                        function getTagNameFromHTML(htmlSnippet) {
-                            var regex = /<(\w+)[\s>]/;
-                            var match = htmlSnippet.match(regex);
-                            return match ? match[1].toLowerCase() : '';
-                        }
-                        const newElement = document.createElement(getTagNameFromHTML(segment.tag) === '' ? segment.tag : getTagNameFromHTML(segment.tag));
-
-                        if (segment.tag === 'script' || segment.tag === 'q-painter') {
-
-                            storeAndExecuteScriptLater(segment.content)
-                            newElement.text = segment.content;
-                            parentElement.appendChild(newElement);
-
-                        } else {
-                            if (segment.tag === 'asdf-component') {}
-                            else {
-
-                                const childSegments = extractPropertiesAndChildren(segment.content);
-                                childSegments.forEach(childSegment => processSegment(childSegment, newElement));
-                                parentElement.appendChild(newElement);
-                            }
-                        }
-                    }
-                } else {
-                                    if (segment.type === 'html') {
-                                            // Inline HTML injection: decode the stored HTML string,
-                                            // parse it into a temporary container, and append each
-                                            // resulting node directly into the current parent.  This
-                                            // preserves the exact ordering relative to siblings and
-                                            // avoids wrapping the content in a surrogate element.
-                                            let htmlString;
-                                            try {
-                                                    htmlString = decodeURIComponent(segment.content);
-                                                } catch {
-                                                        htmlString = segment.content;
-                                                    }
-                                                    const tempContainer = document.createElement('div');
-                                                    tempContainer.innerHTML = htmlString;
-                                                    while (tempContainer.firstChild) {
-                                                            parentElement.appendChild(tempContainer.firstChild);
-                                                        }
-                                                        return;
-                                                    }
-                    if (segment.type === 'css') {
-                        parentElement.setAttribute("style", segment.content);
-                    }
-                }
-            }
-
-            const root = document.createElement('div');
-            const segments = extractPropertiesAndChildren(adjustedInput); // Use the adjusted input
-            segments.forEach(segment => processSegment(segment, root));
-
-            return root.outerHTML;
-        }
-
-        //unusd for now
-        convertComponents(inputText) {
-            const regex = /q-component\s*{\s*id:\s*"([^"]+)"\s*([^}]*)}/g;
-            let match;
-
-            while ((match = regex.exec(inputText)) !== null) {
-                const id = match[1];
-                const content = match[2].trim();
-
-                class CustomComponent extends HTMLElement {
-                    connectedCallback() {
-                        this.innerHTML = content;
-                    }
-                }
-
-                customElements.define(id, CustomComponent);
-
-                const elements = document.getElementsByTagName(id);
-                for (let i = 0; i < elements.length; i++) {
-                    elements[i].innerHTML = content;
-                }
-            }
+        const extract = (typeof window !== 'undefined' && window.extractPropertiesAndChildren)
+            ? window.extractPropertiesAndChildren
+            : extractPropertiesAndChildren;
+        const process = (typeof window !== 'undefined' && window.processSegment)
+            ? window.processSegment
+            : processSegment;
+        const segments = extract(adjustedInput);
+        segments.forEach((seg) => process(seg, root));
+        flushReadyLifecycleHooks(root, root.__qhtmlHost || root);
+        return root.outerHTML;
     }
 
     initMutationObserver() {
@@ -3819,85 +3428,10 @@ class QComponent extends HTMLElement {
 
     connectedCallback() {
         this.style.display = 'none';
-        const componentName = this.getAttribute('id');
-        var slots = [];
-        try {
-            slots = this.getAttribute('slots').split(',');
-        } catch {
-            slots = [];
-        }
-        if (componentName && !customElements.get(componentName)) {
-            const templateContent = this.innerHTML;
-            this.registerCustomElement(componentName, templateContent,slots);
-            this.outerHTML = ''; // Clear the initial content to avoid duplication
+        if (this.getAttribute('id')) {
+            componentLogger.error('', 'Legacy runtime q-component definitions are no longer supported. Use `q-component component-id { ... }` syntax.');
         }
     }
-
-    registerCustomElement(name, content,slots) {
-        const elementClass = this.createCustomElementClass(name, content, slots)
-    }
-    createCustomElementClass(name, content, slots) {
-        var myAttributes = { "slot": this.innerHTML };
-        slots.forEach(function(attr) { myAttributes[attr.trim()] = ""; });
-        return class extends HTMLElement {
-            constructor() {
-                super();
-                // Lay down template HTML immediately
-                this.innerHTML = +content;
-            }
-            static get observedAttributes() {
-                return ['slot'].concat(slots);
-            }
-            attributeChangedCallback(name, oldValue, newValue) {
-                if (name === 'slot') {
-                    this.replaceSlotContent();
-                }
-                if (slots.indexOf(name) !== -1) {
-                    this.replaceCustomSlotContent(name);
-                }
-            }
-            connectedCallback() {
-                // Collect any light-DOM children that specify slot content via attribute: slot="name"
-                const carriers = this.querySelectorAll('[slot]');
-                carriers.forEach(carrier => {
-                    const sName = carrier.getAttribute('slot');
-                    if (!sName) return;
-                    // Save the HTML into the component's attribute (no encoding necessary)
-                    this.setAttribute(sName, carrier.innerHTML);
-                    // Remove the carrier node from the light DOM
-                    carrier.remove();
-                });
-
-                // Now fill default <slot> and custom-named placeholders
-                this.replaceSlotContent();
-                slots.forEach((sName) => {
-                    this.replaceCustomSlotContent(sName);
-                });
-            }
-            replaceSlotContent() {
-                const html = this.getAttribute('slot');
-                if (html == null) return;
-                this.querySelectorAll('slot').forEach(elem => {
-                    elem.innerHTML += html;
-                });
-            }
-            replaceCustomSlotContent(slotName) {
-                const html = this.getAttribute(slotName);
-                if (html == null) return;
-                // a) <slot name="slotName">
-                this.querySelectorAll('slot[name="' + slotName + '"]').forEach(elem => {
-                    elem.innerHTML += html;
-                });
-                // b) <slotname> custom tag placeholder
-                this.querySelectorAll(slotName).forEach(elem => {
-                    elem.innerHTML = html;
-                });
-            }
-        };
-
-
-    }
-
 }
 
 customElements.define('q-component', QComponent);
