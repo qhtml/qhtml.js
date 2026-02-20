@@ -1,6 +1,10 @@
 # QHTML.js (Quick HTML)
 
-> Warning: v5.0 has changes which can break code if migrating from pre-v5.0 q-html.  If you are just upgrading q-html.js but using existing code, then please use the upgrade.html file to upgrade your q-html code to v5.0
+## Warning: 
+> v5.0 has changes which can break code if migrating from earlier versions of q-html.js.
+> To ensure your code is compatible with v5.0, please use `upgrade.html` to convert your existing q-html code to the latest version.
+
+---
 
 QHTML is a compact, readable way to write HTML using a CSS-like block syntax. It turns short, clean markup into real HTML at runtime, without extra boilerplate. Drop your markup inside a `<q-html>` tag, include `qhtml.js`, and the browser renders normal HTML for you.
 
