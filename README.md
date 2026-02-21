@@ -729,7 +729,14 @@ Recursive example:
 
 ## `q-components.qhtml` bundle
 
-`q-components.qhtml` is the component-bundle entrypoint. Instead of keeping all component definitions in one large file, it imports grouped files (currently `q-components/q-modal.qhtml`).
+`q-components.qhtml` is the component-bundle entrypoint. Instead of keeping all component definitions in one large file, it imports grouped files:
+
+- `q-components/q-modal.qhtml`
+- `q-components/q-sidebar.qhtml`
+- `q-components/q-form.qhtml`
+- `q-components/q-grid.qhtml`
+- `q-components/q-tabs.qhtml`
+- `q-components/q-tech-tag.qhtml` (currently a placeholder file with no exported QHTML tags)
 
 Use it like this:
 
@@ -740,7 +747,7 @@ Use it like this:
 </q-html>
 ```
 
-### `q-modal` usage (from `q-components/q-modal.qhtml`)
+### `q-modal` example
 
 ```qhtml
 <q-html>
@@ -765,10 +772,103 @@ Use it like this:
 </q-html>
 ```
 
-Notes:
+### `q-sidebar` example
 
-- The controller methods (`show()`, `hide()`) are exposed on the nested `q-modal-component` node.
-- `header`, `body`, and `footer` are projected into the modal template through the bundle wrappers.
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+
+  q-sidebar {
+    id: "left-sidebar"
+    div.w3-padding {
+      h3 { text { Sidebar title } }
+      p { text { Sidebar content goes here. } }
+    }
+  }
+
+  button {
+    text { Show sidebar }
+    onClick { document.querySelector("#left-sidebar").show(); }
+  }
+
+  button {
+    text { Hide sidebar }
+    onClick { document.querySelector("#left-sidebar").hide(); }
+  }
+</q-html>
+```
+
+### `q-form`, `q-input`, `q-textarea`, `q-submit` example
+
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+
+  q-form {
+    q-input {
+      type: "text";
+      placeholder: "Your name";
+    }
+
+    q-textarea {
+      text { Tell us more... }
+    }
+
+    q-submit {
+      text { Send }
+      onClick { alert("Submitted"); }
+    }
+  }
+</q-html>
+```
+
+### `q-grid`, `q-grid-cell` example
+
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+
+  q-grid {
+    q-grid-cell.w3-half {
+      div.w3-card.w3-padding { text { Left cell } }
+    }
+    q-grid-cell.w3-half {
+      div.w3-card.w3-padding { text { Right cell } }
+    }
+  }
+</q-html>
+```
+
+### `q-tabs`, `q-tabs-section` example
+
+```qhtml
+<q-html>
+  q-import { q-components.qhtml }
+
+  q-tabs {
+    shell-classes { q-script { return ".w3-card-4" } }
+    nav-classes { q-script { return ".w3-light-grey" } }
+    panel-classes { q-script { return ".w3-white" } }
+    section-classes { q-script { return ".w3-animate-opacity" } }
+
+    q-tabs-section {
+      name: "Overview"
+      html { This is the overview tab. }
+    }
+
+    q-tabs-section {
+      name: "Details"
+      html { This is the details tab. }
+    }
+  }
+</q-html>
+```
+
+`q-tabs` exposes `show(tabIndex)` at runtime, for example:
+
+```js
+document.querySelector("q-tabs[q-component='q-tabs']").show(1);
+```
 
 ## `tools/qhtml-tools.js` conversion helpers
 
@@ -947,6 +1047,9 @@ Instances created from `q-component` expose:
 - Methods declared with `function ... { ... }` in the component definition
 - `instance.slots()`
 - `instance.into(slotId, payload)`
+- `instance.resolveSlots()`
+- `instance.toTemplate()`
+- `instance.toTemplateRecursive()`
 
 ```js
 document.addEventListener("QHTMLContentLoaded", function () {
@@ -958,6 +1061,14 @@ document.addEventListener("QHTMLContentLoaded", function () {
   nav.notify();
 });
 ```
+
+Additional lifecycle helpers:
+
+- `resolveSlots()` projects current slot content into rendered markup, removes runtime `into`/`q-into` slot carriers for that instance, and marks the host with `q-slots-resolved="true"`.
+- After `resolveSlots()`, `slots()` returns `[]` with a warning and `into()` is disabled (warning).
+- `toTemplate()` finalizes one instance into plain DOM output by removing the component host tag itself and leaving only its rendered children in place.
+- `toTemplate()` does not recurse into child q-components; nested q-components remain runtime hosts.
+- `toTemplateRecursive()` templates the full descendant q-component tree under the instance, then templates the instance itself.
 
 ### `q-template` runtime behavior
 

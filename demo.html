@@ -1724,6 +1724,7 @@ document.addEventListener("QHTMLContentLoaded", function() {
 
 //set the demo playground default code
 	const demoSource = `
+
 q-template nav-bar {
   w3-black,w3-center {       
     w3-bar-item,w3-btn,w3-hover-grey {  
@@ -1731,6 +1732,12 @@ q-template nav-bar {
     }                   
   }
 }
+q-template q-input-with-label {
+  div {
+    span.w3-label { slot { label } }
+    slot { input-element }
+  } 
+} 
 div.w3-black.w3-text-white.w3-bar, nav-bar {
   li { html { top-item 1 } }   
   li { html { top-item 2 } }    
@@ -1741,11 +1748,50 @@ div.w3-container.w3-title.w3-header.w3-xlarge.w3-green {
   html { Hello world }
 }
 
-blockquote.w3-twothird.w3-article.w3-panel.w3-light-grey, article.w3-justify, p {
-  html { Heres a great article about saying hello to the
-    world. only the way everybody else does it -- by
-    saying hello world... only in latin... okay can i type now hello               } 
+
+
+div.w3-threequarter.w3-light-grey,q-tabs {
+  id: "demo-tabs"
+  q-tabs-section.w3-light-grey {
+    name: "Sign-in"
+    div.w3-light-grey {
+      h3 { text { Sign-in } }
+      q-form {
+        q-input-with-label {
+          label { text { username } }
+          input-element { q-input { name: "username" }  }
+        }
+        q-input-with-label {
+          label { text { password } }
+          input-element { q-input {  type: "password";  name: "password"; } }
+        }
+        q-input-with-label {
+          label { text { sign-in } }
+          input-element { button { text { Submit } } }
+        }
+      }
+    }
+  }
+  q-tabs-section {
+    name: "Details"
+    div.w3-light-grey {
+      h3 { text { Details } }
+      p { text { This is the second tab. } }
+    }
+  }
+
+  q-tabs-section {
+    name: "Contact"
+    div {
+      h3 { text { Contact } }
+      p { text { This is the third tab. } }
+    }
+  }
 }
+
+
+
+
 div.w3-quarter.w3-nav.w3-col.w3-right.w3-padding {
   ul.w3-list.w3-block {
     li.w3-bar.w3-green.w3-bar-item {
@@ -1756,11 +1802,23 @@ div.w3-quarter.w3-nav.w3-col.w3-right.w3-padding {
         li { html { right-item 1 } }   
         li { html { right-item 2 } }    
         li { html { right-item 3 } }    
+        li.w3-button.w3-blue{
+          text { Show Tab 2 }
+          onclick {
+            document.querySelector("#demo-tabs").show(1);
+          }
+        }
+        li.w3-button.w3-blue{
+          text { Show Tab 1 }
+          onclick {
+            document.querySelector("#demo-tabs").show(0);
+          }
+        }
+
       }
     }
   }
-}  
-
+}
 `
 
 // end of demo playground code

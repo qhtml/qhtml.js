@@ -1,14 +1,16 @@
 /* created by mike nickaloff
  * https://www.github.com/qhtml/qhtml.js
- * v5.0.2
+ * v5.0.3
  *
- * 5.0.2 quick summary:
+ * 5.0.3 quick summary:
  * - Runtime q-script and inline event handlers now expose consistent contextual
  *   aliases on `this`: `this.parent`, `this.slot`, and `this.component`.
  * - `this` remains the executing DOM element while slot/component lookup walks
  *   live DOM ancestry (with runtime-template fallback when present).
  * - Alias injection/cleanup is fail-safe so context detection errors do not
  *   break handler or q-script execution.
+ * - q-component now supports q-signal declarations, onSignal handlers, and
+ *   signal.connect(...) chaining between component instances.
  */
 // -----------------------------------------------------------------------------
 // Top-level helper functions
@@ -79,6 +81,8 @@ function mergeClassAttribute(element, classValue) {
 const qhtmlGeneratedComponentActionCache = new Map();
 const qhtmlGeneratedComponentTemplateCache = new Map();
 const qhtmlGeneratedComponentSlotCache = new Map();
+const qhtmlGeneratedComponentSignalCache = new Map();
+const qhtmlGeneratedComponentSignalHandlerCache = new Map();
 const qhtmlInlineEventHandlerCache = new Map();
 let qhtmlRuntimeTemplateCounter = 0;
 
@@ -91,8 +95,25 @@ function setGeneratedComponentDefinition(componentId, definition = {}) {
     const slotNames = Array.isArray(definition.slotNames)
         ? definition.slotNames.map((name) => String(name || '').trim()).filter(Boolean)
         : [];
+    const signals = Array.isArray(definition.signals)
+        ? definition.signals.map((signal) => ({
+            name: String(signal && signal.name ? signal.name : '').trim(),
+            params: Array.isArray(signal && signal.params)
+                ? signal.params.map((param) => String(param || '').trim()).filter(Boolean)
+                : []
+        })).filter((signal) => signal.name)
+        : [];
+    const signalHandlers = Array.isArray(definition.signalHandlers)
+        ? definition.signalHandlers.map((handler) => ({
+            signalName: String(handler && handler.signalName ? handler.signalName : '').trim(),
+            params: String(handler && handler.params ? handler.params : '').trim(),
+            body: String(handler && handler.body ? handler.body : '').trim()
+        })).filter((handler) => handler.signalName)
+        : [];
     qhtmlGeneratedComponentTemplateCache.set(key, template);
     qhtmlGeneratedComponentSlotCache.set(key, slotNames);
+    qhtmlGeneratedComponentSignalCache.set(key, signals);
+    qhtmlGeneratedComponentSignalHandlerCache.set(key, signalHandlers);
 }
 
 function getGeneratedComponentSlotNames(componentId) {
@@ -101,6 +122,22 @@ function getGeneratedComponentSlotNames(componentId) {
         return [];
     }
     return qhtmlGeneratedComponentSlotCache.get(key) || [];
+}
+
+function getGeneratedComponentSignals(componentId) {
+    const key = String(componentId || '').trim().toLowerCase();
+    if (!key) {
+        return [];
+    }
+    return qhtmlGeneratedComponentSignalCache.get(key) || [];
+}
+
+function getGeneratedComponentSignalHandlers(componentId) {
+    const key = String(componentId || '').trim().toLowerCase();
+    if (!key) {
+        return [];
+    }
+    return qhtmlGeneratedComponentSignalHandlerCache.get(key) || [];
 }
 
 function ensureQHtmlRuntimeRegistry() {
@@ -623,6 +660,39 @@ function collectRuntimeTemplateRanges(input) {
     return ranges;
 }
 
+const COMPONENT_SLOTS_RESOLVED_ATTR = 'q-slots-resolved';
+
+function isComponentSlotsResolved(host) {
+    if (!host || typeof host.getAttribute !== 'function') {
+        return false;
+    }
+    return String(host.getAttribute(COMPONENT_SLOTS_RESOLVED_ATTR) || '').trim().toLowerCase() === 'true';
+}
+
+function warnResolvedComponentSlotApi(host, apiName) {
+    const tag = host && host.tagName ? String(host.tagName).toLowerCase() : 'q-component';
+    console.warn(`qhtml: ${apiName}() is disabled on <${tag}> because ${COMPONENT_SLOTS_RESOLVED_ATTR}=\"true\".`);
+}
+
+function isNodeOwnedByComponentHost(node, host) {
+    if (!node || !host || node.nodeType !== 1 || host.nodeType !== 1) {
+        return false;
+    }
+    if (node === host) {
+        return true;
+    }
+    if (typeof host.contains === 'function' && !host.contains(node)) {
+        return false;
+    }
+    if (typeof node.closest === 'function') {
+        const owner = node.closest('[q-component]');
+        if (owner) {
+            return owner === host;
+        }
+    }
+    return true;
+}
+
 function findComponentSlotAnchors(host, slotId = '') {
     if (!host || typeof host.querySelectorAll !== 'function') {
         return [];
@@ -661,7 +731,8 @@ function findComponentIntoCarriers(host, slotId = '') {
         if (!node || node.nodeType !== 1) {
             return;
         }
-        if (String(node.tagName || '').toLowerCase() !== 'q-into') {
+        const tagName = String(node.tagName || '').toLowerCase();
+        if (tagName !== 'q-into' && tagName !== 'into') {
             return;
         }
         if (typeof node.hasAttribute === 'function' && node.hasAttribute('q-slot-anchor')) {
@@ -676,6 +747,115 @@ function findComponentIntoCarriers(host, slotId = '') {
         }
     });
     return carriers;
+}
+
+function findOwnedComponentSlotAnchors(host, slotId = '') {
+    return findComponentSlotAnchors(host, slotId).filter((node) => isNodeOwnedByComponentHost(node, host));
+}
+
+function createComponentClassSlotMarker(slotId) {
+    const normalized = String(slotId == null ? '' : slotId)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return normalized ? `qhtml-slot-${normalized}` : '';
+}
+
+function findComponentClassSlotTargets(host, slotId = '') {
+    if (!host || typeof host.querySelectorAll !== 'function') {
+        return [];
+    }
+    const normalizedSlot = String(slotId == null ? '' : slotId).trim().toLowerCase();
+    if (!normalizedSlot) {
+        return [];
+    }
+    if (!host.__qhtmlClassSlotTargets || typeof host.__qhtmlClassSlotTargets !== 'object') {
+        host.__qhtmlClassSlotTargets = Object.create(null);
+    }
+    const cached = host.__qhtmlClassSlotTargets[normalizedSlot];
+    if (Array.isArray(cached) && cached.length) {
+        return cached.filter((node) => !!node && node.isConnected);
+    }
+    const marker = createComponentClassSlotMarker(normalizedSlot);
+    if (!marker) {
+        return [];
+    }
+    const targets = [];
+    if (host.classList && host.classList.contains(marker)) {
+        targets.push(host);
+        host.classList.remove(marker);
+    }
+    Array.from(host.querySelectorAll('*')).forEach((node) => {
+        if (node && node.classList && node.classList.contains(marker)) {
+            targets.push(node);
+            node.classList.remove(marker);
+        }
+    });
+    host.__qhtmlClassSlotTargets[normalizedSlot] = targets;
+    return targets;
+}
+
+function parseClassTokensFromSlotCarrier(carrier) {
+    const raw = String((carrier && carrier.textContent) || '');
+    const tokens = new Set();
+    const dotMatches = raw.match(/\.[A-Za-z_][A-Za-z0-9_-]*/g) || [];
+    dotMatches.forEach((match) => {
+        const token = match.slice(1).trim();
+        if (token) {
+            tokens.add(token);
+        }
+    });
+    if (!dotMatches.length) {
+        raw.split(/[\s,]+/).forEach((piece) => {
+            const token = String(piece || '').trim();
+            if (/^[A-Za-z_][A-Za-z0-9_-]*$/.test(token)) {
+                tokens.add(token);
+            }
+        });
+    }
+    return Array.from(tokens);
+}
+
+function syncGeneratedComponentClassSlotsFromCarriers(host) {
+    if (!host) {
+        return;
+    }
+    const carriers = findComponentIntoCarriers(host);
+    carriers.forEach((carrier) => {
+        const slotName = String(carrier.getAttribute('slot') || '').trim();
+        const normalizedSlot = slotName.toLowerCase();
+        if (!slotName) {
+            return;
+        }
+        const targets = findComponentClassSlotTargets(host, normalizedSlot);
+        if (!targets.length) {
+            return;
+        }
+        const nextClasses = parseClassTokensFromSlotCarrier(carrier);
+        targets.forEach((target) => {
+            if (!target || !target.classList) {
+                return;
+            }
+            if (!target.__qhtmlClassSlotApplied || typeof target.__qhtmlClassSlotApplied !== 'object') {
+                target.__qhtmlClassSlotApplied = Object.create(null);
+            }
+            const prev = Array.isArray(target.__qhtmlClassSlotApplied[normalizedSlot])
+                ? target.__qhtmlClassSlotApplied[normalizedSlot]
+                : [];
+            prev.forEach((className) => {
+                if (className) {
+                    target.classList.remove(className);
+                }
+            });
+            nextClasses.forEach((className) => {
+                if (className) {
+                    target.classList.add(className);
+                }
+            });
+            target.__qhtmlClassSlotApplied[normalizedSlot] = nextClasses;
+        });
+    });
 }
 
 function cloneNodeList(nodes) {
@@ -704,7 +884,7 @@ function replaceNodeChildren(target, nodes, options = {}) {
 }
 
 function writeNodesIntoComponentAnchors(host, slotId, nodes) {
-    const anchors = findComponentSlotAnchors(host, slotId);
+    const anchors = findOwnedComponentSlotAnchors(host, slotId);
     if (!anchors.length) {
         return false;
     }
@@ -744,7 +924,7 @@ function ensureComponentIntoCarrier(host, slotId) {
 }
 
 function syncGeneratedComponentSlotsFromCarriers(host) {
-    if (!host) {
+    if (!host || isComponentSlotsResolved(host)) {
         return;
     }
     const carriers = findComponentIntoCarriers(host);
@@ -756,10 +936,11 @@ function syncGeneratedComponentSlotsFromCarriers(host) {
         const payload = Array.from(carrier.childNodes || []).map((node) => node.cloneNode(true));
         writeNodesIntoComponentAnchors(host, slotName, payload);
     });
+    syncGeneratedComponentClassSlotsFromCarriers(host);
 }
 
 function normalizeImplicitContentToSingleSlotCarrier(host, slotName) {
-    if (!host || !slotName) {
+    if (!host || !slotName || isComponentSlotsResolved(host)) {
         return;
     }
     if (findComponentIntoCarriers(host).length) {
@@ -786,8 +967,132 @@ function normalizeImplicitContentToSingleSlotCarrier(host, slotName) {
     payload.forEach((node) => carrier.appendChild(node));
 }
 
+function unwrapNodePreservingChildren(node) {
+    if (!node || node.nodeType !== 1 || !node.parentNode) {
+        return;
+    }
+    const parent = node.parentNode;
+    while (node.firstChild) {
+        parent.insertBefore(node.firstChild, node);
+    }
+    parent.removeChild(node);
+}
+
+function resolveComponentSlotsInPlace(host, options = {}) {
+    const { warnIfAlreadyResolved = true } = options;
+    if (!host || host.nodeType !== 1) {
+        return false;
+    }
+    if (isComponentSlotsResolved(host)) {
+        if (warnIfAlreadyResolved) {
+            warnResolvedComponentSlotApi(host, 'resolveSlots');
+        }
+        return true;
+    }
+    ensureGeneratedComponentTemplateHydrated(host);
+    syncGeneratedComponentSlotsFromCarriers(host);
+    findComponentIntoCarriers(host).forEach((carrier) => {
+        if (carrier && carrier.parentNode === host) {
+            host.removeChild(carrier);
+        }
+    });
+    findOwnedComponentSlotAnchors(host).forEach((anchor) => {
+        unwrapNodePreservingChildren(anchor);
+    });
+    host.setAttribute(COMPONENT_SLOTS_RESOLVED_ATTR, 'true');
+    return true;
+}
+
+function teardownComponentRuntimeInstance(host) {
+    if (!host || host.nodeType !== 1) {
+        return;
+    }
+    if (host.__qhtmlActionBindingObserver && typeof host.__qhtmlActionBindingObserver.disconnect === 'function') {
+        host.__qhtmlActionBindingObserver.disconnect();
+    }
+    delete host.__qhtmlActionBindingObserver;
+
+    const signalStore = host.__qhtmlSignalStore;
+    if (signalStore && typeof signalStore === 'object') {
+        Object.keys(signalStore).forEach((signalName) => {
+            const entry = signalStore[signalName];
+            const emitter = host[signalName];
+            if (emitter && typeof emitter.disconnect === 'function') {
+                try {
+                    emitter.disconnect();
+                } catch {
+                    // ignore disconnect failures during teardown
+                }
+            }
+            if (entry && Array.isArray(entry.listeners)) {
+                entry.listeners.length = 0;
+            }
+            if (entry && entry.connectionMap instanceof Map) {
+                entry.connectionMap.clear();
+            }
+            if (entry && entry.handlerKeys instanceof Set) {
+                entry.handlerKeys.clear();
+            }
+            try {
+                delete host[signalName];
+            } catch {
+                // ignore property cleanup failures
+            }
+        });
+    }
+    delete host.__qhtmlSignalStore;
+}
+
+function countNodeDepth(node) {
+    let depth = 0;
+    let cursor = node;
+    while (cursor && cursor.parentElement) {
+        depth += 1;
+        cursor = cursor.parentElement;
+    }
+    return depth;
+}
+
+function toTemplateComponentInstance(host, options = {}) {
+    const { recursive = false } = options;
+    if (!host || host.nodeType !== 1 || typeof document === 'undefined') {
+        return [];
+    }
+
+    if (recursive && typeof host.querySelectorAll === 'function') {
+        const descendants = Array.from(host.querySelectorAll('[q-component]'))
+            .filter((node) => node && node.nodeType === 1 && node !== host)
+            .sort((a, b) => countNodeDepth(b) - countNodeDepth(a));
+        descendants.forEach((node) => {
+            if (node && node.parentNode) {
+                toTemplateComponentInstance(node, { recursive: false });
+            }
+        });
+    }
+
+    resolveComponentSlotsInPlace(host, { warnIfAlreadyResolved: false });
+    teardownComponentRuntimeInstance(host);
+
+    const parent = host.parentNode;
+    if (!parent || typeof parent.insertBefore !== 'function') {
+        return [];
+    }
+    const insertedNodes = [];
+    const fragment = document.createDocumentFragment();
+    while (host.firstChild) {
+        const child = host.firstChild;
+        insertedNodes.push(child);
+        fragment.appendChild(child);
+    }
+    parent.insertBefore(fragment, host);
+    if (typeof parent.removeChild === 'function') {
+        parent.removeChild(host);
+    }
+    return insertedNodes;
+}
+
 function ensureGeneratedComponentTemplateHydrated(host) {
-    if (!host || host.nodeType !== 1 || host.__qhtmlComponentTemplateHydrated || typeof document === 'undefined') {
+    if (!host || host.nodeType !== 1 || host.__qhtmlComponentTemplateHydrated || typeof document === 'undefined' || isComponentSlotsResolved(host)) {
         return;
     }
     const componentId = String(host.tagName || '').toLowerCase();
@@ -841,12 +1146,14 @@ function hydrateGeneratedComponentInstances(root) {
             if (!instance.getAttribute('qhtml-component-instance')) {
                 instance.setAttribute('qhtml-component-instance', '1');
             }
-            const slotNames = getGeneratedComponentSlotNames(componentId);
-            if (slotNames.length === 1) {
-                normalizeImplicitContentToSingleSlotCarrier(instance, slotNames[0]);
+            if (!isComponentSlotsResolved(instance)) {
+                const slotNames = getGeneratedComponentSlotNames(componentId);
+                if (slotNames.length === 1) {
+                    normalizeImplicitContentToSingleSlotCarrier(instance, slotNames[0]);
+                }
+                ensureGeneratedComponentTemplateHydrated(instance);
+                syncGeneratedComponentSlotsFromCarriers(instance);
             }
-            ensureGeneratedComponentTemplateHydrated(instance);
-            syncGeneratedComponentSlotsFromCarriers(instance);
             const compiled = qhtmlGeneratedComponentActionCache.get(componentId) || [];
             const actionNames = [];
             compiled.forEach((entry) => {
@@ -868,9 +1175,13 @@ function hydrateGeneratedComponentInstances(root) {
 }
 
 function listComponentSlotNames(host) {
+    if (isComponentSlotsResolved(host)) {
+        warnResolvedComponentSlotApi(host, 'slots');
+        return [];
+    }
     const names = [];
     const seen = new Set();
-    findComponentSlotAnchors(host).forEach((anchor) => {
+    findOwnedComponentSlotAnchors(host).forEach((anchor) => {
         const slotName = String(anchor.getAttribute('slot') || '').trim();
         if (!slotName || seen.has(slotName)) {
             return;
@@ -964,6 +1275,10 @@ function normalizeIntoPayloadToNodes(payload, hostForReady) {
 }
 
 function injectIntoComponentSlot(host, slotId, payload) {
+    if (isComponentSlotsResolved(host)) {
+        warnResolvedComponentSlotApi(host, 'into');
+        return false;
+    }
     const normalizedSlot = String(slotId == null ? '' : slotId).trim();
     if (!normalizedSlot) {
         return false;
@@ -974,7 +1289,240 @@ function injectIntoComponentSlot(host, slotId, payload) {
     if (carrier) {
         replaceNodeChildren(carrier, cloneNodeList(nodes));
     }
-    return writeNodesIntoComponentAnchors(host, normalizedSlot, nodes) || !!carrier;
+    const projected = writeNodesIntoComponentAnchors(host, normalizedSlot, nodes) || !!carrier;
+    syncGeneratedComponentClassSlotsFromCarriers(host);
+    return projected;
+}
+
+function signalNameToHandlerProperty(signalName) {
+    const name = String(signalName || '').trim();
+    if (!name) {
+        return '';
+    }
+    return `on${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+}
+
+function handlerTagToSignalName(tagName) {
+    const tag = String(tagName || '').trim();
+    if (!/^on[A-Za-z0-9_]+$/.test(tag) || tag.length <= 2) {
+        return '';
+    }
+    const suffix = tag.slice(2);
+    return `${suffix.charAt(0).toLowerCase()}${suffix.slice(1)}`;
+}
+
+function ensureComponentSignals(host, signalDefs = [], signalHandlers = [], componentId = '') {
+    if (!host || (typeof host !== 'object' && typeof host !== 'function')) {
+        return;
+    }
+    if (!host.__qhtmlSignalStore || typeof host.__qhtmlSignalStore !== 'object') {
+        host.__qhtmlSignalStore = Object.create(null);
+    }
+    const store = host.__qhtmlSignalStore;
+    const normalizedDefs = (Array.isArray(signalDefs) ? signalDefs : [])
+        .map((entry) => ({
+            name: String(entry && entry.name ? entry.name : '').trim(),
+            params: Array.isArray(entry && entry.params)
+                ? entry.params.map((param) => String(param || '').trim()).filter(Boolean)
+                : []
+        }))
+        .filter((entry) => entry.name);
+
+    normalizedDefs.forEach((signalDef) => {
+        const signalName = signalDef.name;
+        if (!store[signalName]) {
+            store[signalName] = {
+                name: signalName,
+                params: signalDef.params.slice(),
+                listeners: [],
+                connectionMap: new Map(),
+                handlerKeys: new Set(),
+                emitter: null
+            };
+        }
+        const entry = store[signalName];
+        if (!Array.isArray(entry.listeners)) {
+            entry.listeners = [];
+        }
+        if (!(entry.connectionMap instanceof Map)) {
+            entry.connectionMap = new Map();
+        }
+        if (!(entry.handlerKeys instanceof Set)) {
+            entry.handlerKeys = new Set();
+        }
+        if (signalDef.params.length) {
+            entry.params = signalDef.params.slice();
+        }
+
+        let signalFn = host[signalName];
+        const shouldCreateEmitter = !(
+            typeof signalFn === 'function'
+            && signalFn.__qhtmlSignalHost === host
+            && signalFn.__qhtmlSignalName === signalName
+        );
+
+        if (shouldCreateEmitter) {
+            signalFn = function(...args) {
+                const listeners = Array.isArray(entry.listeners) ? entry.listeners.slice() : [];
+                listeners.forEach((listener) => {
+                    if (typeof listener !== 'function') {
+                        return;
+                    }
+                    const restoreThisContext = applyQHtmlRuntimeThisContext(host);
+                    try {
+                        listener.apply(host, args);
+                    } catch (err) {
+                        componentLogger.error(componentId, `Signal listener for "${signalName}" failed.`);
+                    } finally {
+                        if (typeof restoreThisContext === 'function') {
+                            restoreThisContext();
+                        }
+                    }
+                });
+
+                const handlerProp = signalNameToHandlerProperty(signalName);
+                const possibleHandlers = [
+                    handlerProp ? host[handlerProp] : null,
+                    handlerProp ? host[handlerProp.toLowerCase()] : null
+                ];
+                const seenHandlers = new Set();
+                possibleHandlers.forEach((handler) => {
+                    if (typeof handler !== 'function' || seenHandlers.has(handler)) {
+                        return;
+                    }
+                    seenHandlers.add(handler);
+                    if (handler === signalFn) {
+                        return;
+                    }
+                    const restoreThisContext = applyQHtmlRuntimeThisContext(host);
+                    try {
+                        handler.apply(host, args);
+                    } catch (err) {
+                        componentLogger.error(componentId, `Signal handler "${handlerProp}" failed.`);
+                    } finally {
+                        if (typeof restoreThisContext === 'function') {
+                            restoreThisContext();
+                        }
+                    }
+                });
+
+                if (typeof host.dispatchEvent === 'function') {
+                    try {
+                        host.dispatchEvent(new CustomEvent(signalName, {
+                            detail: {
+                                signal: signalName,
+                                args: args.slice()
+                            }
+                        }));
+                    } catch (err) {
+                        // Ignore dispatch errors for non-EventTarget hosts.
+                    }
+                }
+            };
+
+            signalFn.connect = function(target) {
+                if (typeof target !== 'function') {
+                    return signalFn;
+                }
+                if (target === signalFn) {
+                    return signalFn;
+                }
+                if (entry.connectionMap.has(target)) {
+                    return signalFn;
+                }
+                const forwarder = function(...args) {
+                    if (typeof target !== 'function') {
+                        return;
+                    }
+                    target(...args);
+                };
+                entry.connectionMap.set(target, forwarder);
+                entry.listeners.push(forwarder);
+                return signalFn;
+            };
+
+            signalFn.disconnect = function(target) {
+                if (typeof target === 'undefined' || target === null) {
+                    entry.connectionMap.forEach((forwarder) => {
+                        entry.listeners = entry.listeners.filter((listener) => listener !== forwarder);
+                    });
+                    entry.connectionMap.clear();
+                    return signalFn;
+                }
+                const forwarder = entry.connectionMap.get(target);
+                if (!forwarder) {
+                    return signalFn;
+                }
+                entry.listeners = entry.listeners.filter((listener) => listener !== forwarder);
+                entry.connectionMap.delete(target);
+                return signalFn;
+            };
+
+            signalFn.add = function(listener) {
+                if (typeof listener !== 'function') {
+                    return signalFn;
+                }
+                if (!entry.listeners.includes(listener)) {
+                    entry.listeners.push(listener);
+                }
+                return signalFn;
+            };
+
+            signalFn.remove = function(listener) {
+                if (typeof listener !== 'function') {
+                    return signalFn;
+                }
+                entry.listeners = entry.listeners.filter((current) => current !== listener);
+                return signalFn;
+            };
+
+            signalFn.emit = function(...args) {
+                return signalFn(...args);
+            };
+
+            signalFn.__qhtmlSignalHost = host;
+            signalFn.__qhtmlSignalName = signalName;
+            host[signalName] = signalFn;
+        }
+
+        entry.emitter = signalFn;
+    });
+
+    const normalizedHandlers = (Array.isArray(signalHandlers) ? signalHandlers : [])
+        .map((entry) => ({
+            signalName: String(entry && entry.signalName ? entry.signalName : '').trim(),
+            params: String(entry && entry.params ? entry.params : '').trim(),
+            body: String(entry && entry.body ? entry.body : '').trim()
+        }))
+        .filter((entry) => entry.signalName && entry.body);
+
+    normalizedHandlers.forEach((handlerDef) => {
+        const entry = store[handlerDef.signalName];
+        if (!entry) {
+            return;
+        }
+        const handlerKey = `${handlerDef.signalName}|${handlerDef.params}|${handlerDef.body}`;
+        if (entry.handlerKeys.has(handlerKey)) {
+            return;
+        }
+        try {
+            const fn = new Function(handlerDef.params, handlerDef.body);
+            const listener = function(...args) {
+                const restoreThisContext = applyQHtmlRuntimeThisContext(host);
+                try {
+                    return fn.apply(host, args);
+                } finally {
+                    if (typeof restoreThisContext === 'function') {
+                        restoreThisContext();
+                    }
+                }
+            };
+            entry.listeners.push(listener);
+            entry.handlerKeys.add(handlerKey);
+        } catch (err) {
+            componentLogger.error(componentId, `Failed to compile signal handler for "${handlerDef.signalName}".`);
+        }
+    });
 }
 
 function installGeneratedComponentBaseMethods(ctor) {
@@ -990,6 +1538,22 @@ function installGeneratedComponentBaseMethods(ctor) {
         ctor.prototype.into = function(slotId, payload) {
             injectIntoComponentSlot(this, slotId, payload);
             return this;
+        };
+    }
+    if (typeof ctor.prototype.resolveSlots !== 'function') {
+        ctor.prototype.resolveSlots = function() {
+            resolveComponentSlotsInPlace(this);
+            return this;
+        };
+    }
+    if (typeof ctor.prototype.toTemplate !== 'function') {
+        ctor.prototype.toTemplate = function() {
+            return toTemplateComponentInstance(this, { recursive: false });
+        };
+    }
+    if (typeof ctor.prototype.toTemplateRecursive !== 'function') {
+        ctor.prototype.toTemplateRecursive = function() {
+            return toTemplateComponentInstance(this, { recursive: true });
         };
     }
 }
@@ -1398,7 +1962,7 @@ function installGeneratedComponentActions(ctor, componentId, actions) {
     });
 }
 
-function ensureGeneratedCustomElement(componentId, actions) {
+function ensureGeneratedCustomElement(componentId, actions, signals = [], signalHandlers = []) {
     if (!isValidCustomElementName(componentId)) {
         return false;
     }
@@ -1412,12 +1976,17 @@ function ensureGeneratedCustomElement(componentId, actions) {
     }
     class GeneratedQHtmlComponent extends HTMLElement {
         connectedCallback() {
-            const slotNames = getGeneratedComponentSlotNames(componentId);
-            if (slotNames.length === 1) {
-                normalizeImplicitContentToSingleSlotCarrier(this, slotNames[0]);
+            if (!isComponentSlotsResolved(this)) {
+                const slotNames = getGeneratedComponentSlotNames(componentId);
+                if (slotNames.length === 1) {
+                    normalizeImplicitContentToSingleSlotCarrier(this, slotNames[0]);
+                }
+                ensureGeneratedComponentTemplateHydrated(this);
+                syncGeneratedComponentSlotsFromCarriers(this);
             }
-            ensureGeneratedComponentTemplateHydrated(this);
-            syncGeneratedComponentSlotsFromCarriers(this);
+            const componentSignals = getGeneratedComponentSignals(componentId);
+            const componentSignalHandlers = getGeneratedComponentSignalHandlers(componentId);
+            ensureComponentSignals(this, componentSignals, componentSignalHandlers, componentId);
             const actionNames = (qhtmlGeneratedComponentActionCache.get(componentId) || [])
                 .map((entry) => String(entry && entry.name ? entry.name : '').trim())
                 .filter(Boolean);
@@ -1495,16 +2064,14 @@ function addSemicolonToProperties(input) {
 }
 
 /**
- * Replace backtick-enclosed template strings with their evaluated values.
- * Note: this uses `eval` to compute the result of the template.  Because
- * executing arbitrary JavaScript can be dangerous, only enable this in
- * trusted contexts.
+ * Legacy compatibility no-op for backtick preprocessing.
+ * Backtick-enclosed content is no longer evaluated as JavaScript.
  *
- * @param {string} input The qhtml text containing backtick strings
- * @returns {string} A version of the input with backtick expressions replaced
+ * @param {string} input The qhtml text
+ * @returns {string} The input unchanged
  */
 function replaceBackticksWithQuotes(input) {
-    return input.replace(/`([^`]*)`/g, (match, p1) => (eval(p1)));
+    return String(input == null ? '' : input);
 }
 
 /**
@@ -1519,6 +2086,56 @@ function replaceBackticksWithQuotes(input) {
 function encodeQuotedStrings(qhtml) {
     const regex = /"{1}([^\"]*)"{1}/mg;
     return qhtml.replace(regex, (match, p1) => `"${encodeURIComponent(p1)}"`);
+}
+
+function decodeEncodedStringIfNeeded(value) {
+    const text = String(value == null ? '' : value);
+    if (!/%[0-9A-Fa-f]{2}/.test(text)) {
+        return text;
+    }
+    return text.replace(/(?:%[0-9A-Fa-f]{2})+/g, (chunk) => {
+        try {
+            return decodeURIComponent(chunk);
+        } catch {
+            return chunk;
+        }
+    });
+}
+
+function decodeEncodedDomTree(node) {
+    if (!node) {
+        return;
+    }
+    const queue = [node];
+    while (queue.length) {
+        const current = queue.shift();
+        if (!current) {
+            continue;
+        }
+        if (current.nodeType === 1) {
+            const attrs = Array.from(current.attributes || []);
+            attrs.forEach((attr) => {
+                const name = String(attr && attr.name ? attr.name : '');
+                if (!name) {
+                    return;
+                }
+                const raw = String(attr.value || '');
+                const decoded = decodeEncodedStringIfNeeded(raw);
+                if (decoded !== raw) {
+                    current.setAttribute(name, decoded);
+                }
+            });
+        } else if (current.nodeType === 3) {
+            const raw = String(current.textContent || '');
+            const decoded = decodeEncodedStringIfNeeded(raw);
+            if (decoded !== raw) {
+                current.textContent = decoded;
+            }
+        }
+        if (current.childNodes && current.childNodes.length) {
+            queue.push(...Array.from(current.childNodes));
+        }
+    }
 }
 
 /**
@@ -2202,11 +2819,13 @@ function replaceTemplateSlots(template, slotMap, options = {}) {
         if (!hasReplacement && slotName && warnOnMissing) {
             componentLogger.warn(componentId, `No content provided for slot "${slotName}".`);
         }
+        const beforeChar = s > 0 ? result[s - 1] : '';
+        const isDotSlotPlaceholder = beforeChar === '.';
         let replacement = '';
         if (slotName) {
             const escapedSlotName = escapeQHtmlPropString(slotName);
             const slotContent = hasReplacement ? slotMap.get(slotName) : '';
-            if (preserveAnchors) {
+            if (preserveAnchors && !isDotSlotPlaceholder) {
                 replacement = [
                     `q-into {`,
                     `  slot: "${escapedSlotName}";`,
@@ -2214,6 +2833,10 @@ function replaceTemplateSlots(template, slotMap, options = {}) {
                     slotContent,
                     `}`
                 ].join('\n');
+            } else if (preserveAnchors && isDotSlotPlaceholder) {
+                replacement = hasReplacement
+                    ? slotContent || ''
+                    : createComponentClassSlotMarker(slotName);
             } else {
                 replacement = slotContent || '';
             }
@@ -2332,6 +2955,237 @@ function serializeInvocationAttributes(attributes) {
 }
 
 /**
+ * Parse a q-signal parameter list into validated identifier tokens.
+ *
+ * @param {string} source Comma-separated parameter identifiers
+ * @param {string} componentId Component id for diagnostics
+ * @param {string} signalName Signal id for diagnostics
+ * @returns {string[]} Parameter names
+ */
+function parseSignalParameterList(source, componentId = '', signalName = '') {
+    const raw = String(source || '').trim();
+    if (!raw) {
+        return [];
+    }
+    const params = [];
+    raw.split(',').map((item) => String(item || '').trim()).forEach((paramName) => {
+        if (!paramName) {
+            return;
+        }
+        if (!/^[A-Za-z_$][\w$]*$/.test(paramName)) {
+            componentLogger.warn(componentId, `Signal "${signalName}" ignores invalid parameter "${paramName}".`);
+            return;
+        }
+        if (!params.includes(paramName)) {
+            params.push(paramName);
+        }
+    });
+    return params;
+}
+
+/**
+ * Extract top-level q-signal declarations from a component body.
+ *
+ * Supported syntax:
+ *   q-signal stateChanged(newState)
+ *   q-signal stateChanged(newState);
+ *
+ * @param {string} inner Component inner body text (without outer braces)
+ * @param {string} componentId Component id for diagnostics
+ * @returns {{template: string, signals: Array<{name: string, params: string[]}>}}
+ */
+function extractComponentSignalsAndTemplate(inner, componentId = '') {
+    const source = String(inner || '');
+    const signals = [];
+    const removals = [];
+    const seen = new Set();
+
+    let depth = 0;
+    let inSingle = false;
+    let inDouble = false;
+    let inBacktick = false;
+    let escaped = false;
+
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if ((inSingle || inDouble || inBacktick) && ch === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (!inDouble && !inBacktick && ch === '\'') {
+            inSingle = !inSingle;
+            continue;
+        }
+        if (!inSingle && !inBacktick && ch === '"') {
+            inDouble = !inDouble;
+            continue;
+        }
+        if (!inSingle && !inDouble && ch === '`') {
+            inBacktick = !inBacktick;
+            continue;
+        }
+        if (inSingle || inDouble || inBacktick) {
+            continue;
+        }
+
+        if (ch === '{') {
+            depth++;
+            continue;
+        }
+        if (ch === '}') {
+            depth = Math.max(0, depth - 1);
+            continue;
+        }
+        if (depth !== 0) {
+            continue;
+        }
+
+        if (i > 0 && /[A-Za-z0-9_$-]/.test(source[i - 1])) {
+            continue;
+        }
+        if (!source.startsWith('q-signal', i)) {
+            continue;
+        }
+
+        const match = source.slice(i).match(/^q-signal\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*;?/);
+        if (!match) {
+            continue;
+        }
+
+        const signalName = String(match[1] || '').trim();
+        const signalKey = signalName.toLowerCase();
+        if (seen.has(signalKey)) {
+            componentLogger.warn(componentId, `Duplicate q-signal declaration "${signalName}" ignored.`);
+        } else {
+            seen.add(signalKey);
+            signals.push({
+                name: signalName,
+                params: parseSignalParameterList(match[2], componentId, signalName)
+            });
+        }
+
+        removals.push({
+            start: i,
+            end: i + match[0].length
+        });
+        i += match[0].length - 1;
+    }
+
+    if (!removals.length) {
+        return {
+            template: source.trim(),
+            signals
+        };
+    }
+
+    let template = source;
+    removals.sort((a, b) => b.start - a.start).forEach((range) => {
+        let end = range.end;
+        while (end < template.length && /\s/.test(template[end])) end++;
+        if (template[end] === ';') end++;
+        template = template.slice(0, range.start) + template.slice(end);
+    });
+
+    return {
+        template: template.trim(),
+        signals
+    };
+}
+
+/**
+ * Extract top-level onSignal handlers from a component body.
+ *
+ * Supported syntax (for declared signals only):
+ *   onStateChanged { ... }
+ *
+ * @param {string} inner Component body text
+ * @param {Array<{name: string, params: string[]}>} signals Known component signals
+ * @param {string} componentId Component id for diagnostics
+ * @returns {{template: string, signalHandlers: Array<{signalName: string, params: string, body: string}>}}
+ */
+function extractComponentSignalHandlersAndTemplate(inner, signals = [], componentId = '') {
+    const signalLookup = new Map();
+    (Array.isArray(signals) ? signals : []).forEach((signal) => {
+        const signalName = String(signal && signal.name ? signal.name : '').trim();
+        if (!signalName) {
+            return;
+        }
+        signalLookup.set(signalName.toLowerCase(), {
+            name: signalName,
+            params: Array.isArray(signal && signal.params)
+                ? signal.params.map((param) => String(param || '').trim()).filter(Boolean)
+                : []
+        });
+    });
+
+    if (!signalLookup.size) {
+        return {
+            template: String(inner || '').trim(),
+            signalHandlers: []
+        };
+    }
+
+    const source = String(inner || '');
+    const segments = splitTopLevelSegments(source);
+    const signalHandlers = [];
+    const removals = [];
+
+    for (const seg of segments) {
+        const segTag = String(seg && seg.tag ? seg.tag : '').trim();
+        const candidate = handlerTagToSignalName(segTag);
+        if (!candidate) {
+            continue;
+        }
+        const signalDef = signalLookup.get(candidate.toLowerCase());
+        if (!signalDef) {
+            continue;
+        }
+        const open = seg.block.indexOf('{');
+        const close = seg.block.lastIndexOf('}');
+        const handlerBody = open !== -1 && close > open
+            ? seg.block.slice(open + 1, close).trim()
+            : '';
+
+        signalHandlers.push({
+            signalName: signalDef.name,
+            params: signalDef.params.join(', '),
+            body: handlerBody
+        });
+        removals.push({
+            start: seg.start,
+            end: seg.braceClose + 1
+        });
+    }
+
+    if (!removals.length) {
+        return {
+            template: source.trim(),
+            signalHandlers
+        };
+    }
+
+    let template = source;
+    removals.sort((a, b) => b.start - a.start).forEach((range) => {
+        let end = range.end;
+        while (end < template.length && /\s/.test(template[end])) end++;
+        if (template[end] === ';') end++;
+        template = template.slice(0, range.start) + template.slice(end);
+    });
+
+    return {
+        template: template.trim(),
+        signalHandlers
+    };
+}
+
+/**
  * Extract top-level component function declarations and return a cleaned
  * template body without those declarations.
  *
@@ -2394,6 +3248,22 @@ function extractComponentActionsAndTemplate(inner, componentId = '') {
     };
 }
 
+function extractComponentRuntimeMetadataAndTemplate(inner, componentId = '') {
+    const signalExtracted = extractComponentSignalsAndTemplate(inner, componentId);
+    const handlerExtracted = extractComponentSignalHandlersAndTemplate(
+        signalExtracted.template,
+        signalExtracted.signals,
+        componentId
+    );
+    const actionExtracted = extractComponentActionsAndTemplate(handlerExtracted.template, componentId);
+    return {
+        template: actionExtracted.template,
+        actions: actionExtracted.actions,
+        signals: signalExtracted.signals,
+        signalHandlers: handlerExtracted.signalHandlers
+    };
+}
+
 function addInvocationAttributesToPrimarySegment(source, options = {}) {
     if (!source) return source;
     const {
@@ -2434,7 +3304,7 @@ function buildQIntoCarriersFromSlotEntries(slotEntries) {
     }).filter(Boolean).join('\n');
 }
 
-function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttributes = {}, classes = [], actions = [], hostBlocks = []) {
+function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttributes = {}, classes = [], actions = [], signals = [], signalHandlers = [], hostBlocks = []) {
     const attrs = Object.assign({}, rootAttributes, {
         'q-component': componentId,
         'qhtml-component-instance': '1'
@@ -2445,6 +3315,24 @@ function buildRuntimeComponentInvocation(componentId, slotEntries, rootAttribute
     const attrLines = serializeInvocationAttributes(attrs);
     const carrierBlocks = buildQIntoCarriersFromSlotEntries(slotEntries);
     const readyLines = [];
+    const signalDefs = (Array.isArray(signals) ? signals : [])
+        .map((signal) => ({
+            name: String(signal && signal.name ? signal.name : '').trim(),
+            params: Array.isArray(signal && signal.params)
+                ? signal.params.map((param) => String(param || '').trim()).filter(Boolean)
+                : []
+        }))
+        .filter((signal) => signal.name);
+    const signalHandlerDefs = (Array.isArray(signalHandlers) ? signalHandlers : [])
+        .map((handler) => ({
+            signalName: String(handler && handler.signalName ? handler.signalName : '').trim(),
+            params: String(handler && handler.params ? handler.params : '').trim(),
+            body: String(handler && handler.body ? handler.body : '').trim()
+        }))
+        .filter((handler) => handler.signalName && handler.body);
+    if (signalDefs.length || signalHandlerDefs.length) {
+        readyLines.push(`ensureComponentSignals(this, ${JSON.stringify(signalDefs)}, ${JSON.stringify(signalHandlerDefs)}, ${JSON.stringify(componentId)});`);
+    }
     const actionNames = (Array.isArray(actions) ? actions : [])
         .map((action) => ({
             name: String(action && action.name ? action.name : '').trim(),
@@ -2525,7 +3413,9 @@ function transformComponentDefinitionsHelper(input) {
                 continue;
             }
             const templateSource = stripTopLevelProps(inner, ['id', 'slots']).trim();
-            const extracted = extractComponentActionsAndTemplate(templateSource, id);
+            const extracted = kind === 'component'
+                ? extractComponentRuntimeMetadataAndTemplate(templateSource, id)
+                : extractComponentActionsAndTemplate(templateSource, id);
             if (kind === 'template' && extracted.actions.length) {
                 componentLogger.warn(id, 'q-template ignores function blocks.');
             }
@@ -2533,7 +3423,9 @@ function transformComponentDefinitionsHelper(input) {
                 kind,
                 id,
                 template: extracted.template,
-                actions: kind === 'component' ? extracted.actions : []
+                actions: kind === 'component' ? extracted.actions : [],
+                signals: kind === 'component' ? (extracted.signals || []) : [],
+                signalHandlers: kind === 'component' ? (extracted.signalHandlers || []) : []
             });
             out = out.slice(0, start) + out.slice(close + 1);
             idx = Math.max(0, start - 1);
@@ -2555,10 +3447,12 @@ function transformComponentDefinitionsHelper(input) {
         if (def.kind === 'component') {
             setGeneratedComponentDefinition(def.id, {
                 template: def.template,
-                slotNames: Array.from(slotInfo.slotNames || [])
+                slotNames: Array.from(slotInfo.slotNames || []),
+                signals: def.signals || [],
+                signalHandlers: def.signalHandlers || []
             });
             if (isValidCustomElementName(def.id)) {
-                ensureGeneratedCustomElement(def.id, def.actions);
+                ensureGeneratedCustomElement(def.id, def.actions, def.signals, def.signalHandlers);
             } else {
                 componentLogger.warn(def.id, 'Component id is not a valid custom-element name; methods are unavailable on document.createElement for this tag.');
             }
@@ -2620,9 +3514,23 @@ function transformComponentDefinitionsHelper(input) {
                 const children = splitTopLevelSegments(body);
                 const slotEntries = [];
                 const hostBlocks = [];
+                const invocationSignalHandlers = [];
                 const nonSlotChildStarts = new Set();
                 let hasSlotTagBlocks = false;
                 let hasLegacySlotDirective = false;
+                const signalLookup = new Map();
+                (Array.isArray(def.signals) ? def.signals : []).forEach((signal) => {
+                    const signalName = String(signal && signal.name ? signal.name : '').trim();
+                    if (!signalName) {
+                        return;
+                    }
+                    signalLookup.set(signalName.toLowerCase(), {
+                        name: signalName,
+                        params: Array.isArray(signal && signal.params)
+                            ? signal.params.map((param) => String(param || '').trim()).filter(Boolean)
+                            : []
+                    });
+                });
 
                 const intoNodes = collectIntoNodes(body, componentIds, id);
                 const hasIntoBlocks = hasTopLevelIntoBlock(body, componentIds);
@@ -2643,6 +3551,24 @@ function transformComponentDefinitionsHelper(input) {
                 for (const seg of children) {
                     const segTag = String(seg && seg.tag ? seg.tag : '').trim();
                     if (/^on[A-Za-z0-9_]+$/i.test(segTag)) {
+                        const candidateSignalName = handlerTagToSignalName(segTag);
+                        const signalDef = candidateSignalName ? signalLookup.get(candidateSignalName.toLowerCase()) : null;
+                        if (signalDef && !isReadyLifecycleName(segTag)) {
+                            const open = seg.block.indexOf('{');
+                            const close = seg.block.lastIndexOf('}');
+                            const handlerBody = open !== -1 && close > open
+                                ? seg.block.slice(open + 1, close).trim()
+                                : '';
+                            invocationSignalHandlers.push({
+                                signalName: signalDef.name,
+                                params: signalDef.params.join(', '),
+                                body: handlerBody
+                            });
+                            if (typeof seg.start === 'number') {
+                                nonSlotChildStarts.add(seg.start);
+                            }
+                            continue;
+                        }
                         hostBlocks.push(seg.block);
                         if (typeof seg.start === 'number') {
                             nonSlotChildStarts.add(seg.start);
@@ -2693,7 +3619,19 @@ function transformComponentDefinitionsHelper(input) {
 
                 let replacement = '';
                 if (kind === 'component') {
-                    replacement = buildRuntimeComponentInvocation(id, slotEntries, rootAttributes, componentClasses, def.actions, hostBlocks);
+                    const runtimeSignalHandlers = []
+                        .concat(Array.isArray(def.signalHandlers) ? def.signalHandlers : [])
+                        .concat(invocationSignalHandlers);
+                    replacement = buildRuntimeComponentInvocation(
+                        id,
+                        slotEntries,
+                        rootAttributes,
+                        componentClasses,
+                        def.actions,
+                        def.signals,
+                        runtimeSignalHandlers,
+                        hostBlocks
+                    );
                 } else {
                     const slotMap = slotEntriesToMap(slotEntries);
                     const suppressMissingWarnings = !hasExplicitSlotUsage && children.length === 0;
@@ -2728,6 +3666,7 @@ function sanitizeInlineHandler(scriptBody) {
     let inBacktick = false;
     let escaped = false;
     let lastWasSpace = false;
+    let lastWasNewline = false;
 
     for (let i = 0; i < scriptBody.length; i++) {
         const ch = scriptBody[i];
@@ -2767,16 +3706,27 @@ function sanitizeInlineHandler(scriptBody) {
             continue;
         }
 
+        if (!inSingle && !inDouble && !inBacktick && (ch === '\n' || ch === '\r')) {
+            if (!lastWasNewline) {
+                out += '\n';
+            }
+            lastWasSpace = false;
+            lastWasNewline = true;
+            continue;
+        }
+
         if (!inSingle && !inDouble && !inBacktick && /\s/.test(ch)) {
             if (!lastWasSpace) {
                 out += ' ';
                 lastWasSpace = true;
             }
+            lastWasNewline = false;
             continue;
         }
 
         out += ch;
         lastWasSpace = false;
+        lastWasNewline = false;
     }
 
     return out.trim();
@@ -3120,7 +4070,14 @@ function flushReadyLifecycleHooks(parentElement, fallbackThis) {
     queued.forEach((scriptBody) => {
         try {
             const fn = new Function(scriptBody);
-            fn.call(boundThis);
+            const restoreThisContext = applyQHtmlRuntimeThisContext(boundThis);
+            try {
+                fn.call(boundThis);
+            } finally {
+                if (typeof restoreThisContext === 'function') {
+                    restoreThisContext();
+                }
+            }
         } catch (err) {
             console.error('Failed to execute onReady/onLoad lifecycle block', err);
         }
@@ -3200,7 +4157,14 @@ function processPropertySegment(segment, parentElement) {
             console.error('Failed to compile function for property', segment.name, err);
         }
     } else {
-        const resolvedValue = evaluateQScriptBlocks(segment.value, { thisArg: parentElement });
+        let resolvedValue = evaluateQScriptBlocks(segment.value, { thisArg: parentElement });
+        if (typeof resolvedValue === 'string') {
+            try {
+                resolvedValue = decodeURIComponent(resolvedValue);
+            } catch {
+                // keep raw value when it is not URI-encoded
+            }
+        }
         if (propNameLower === 'class') {
             mergeClassAttribute(parentElement, resolvedValue);
         } else {
@@ -3480,10 +4444,9 @@ class QHtmlElement extends HTMLElement {
             delete this.__qhtmlResolvedImports;
             const qhtmlContent = this.preprocessAfterImports(importResolved);
 
-            const htmlContent = this.parseQHtml(qhtmlContent);
-
-            const regex = /"{1}([^\"]*)"{1}/mg;
-            this.innerHTML = htmlContent.replace(regex, (match, p1) => `"${decodeURIComponent(p1)}"`); // Modify this line
+            const parsedRoot = this.parseQHtmlToRoot(qhtmlContent);
+            const children = Array.from(parsedRoot.childNodes || []);
+            this.replaceChildren(...children);
             finalizeRuntimeComponentHosts(this);
             hydrateGeneratedComponentInstances(this);
 
@@ -3510,7 +4473,6 @@ class QHtmlElement extends HTMLElement {
         input = evaluateQScriptBlocks(input, { topLevelOnly: true });
         input = stripBlockComments(input);
         input = addSemicolonToProperties(input);
-        input = replaceBackticksWithQuotes(input);
         return transformComponentDefinitionsHelper(input);
     }
 
@@ -3518,7 +4480,7 @@ class QHtmlElement extends HTMLElement {
         return transformComponentDefinitionsHelper(input);
     }
 
-    parseQHtml(qhtml) {
+    parseQHtmlToRoot(qhtml) {
         const runtimeInput = evaluateQScriptBlocks(qhtml, {
             topLevelOnly: true,
             thisArg: this
@@ -3538,6 +4500,12 @@ class QHtmlElement extends HTMLElement {
         const segments = extract(adjustedInput);
         segments.forEach((seg) => process(seg, root));
         flushReadyLifecycleHooks(root, root.__qhtmlHost || root);
+        decodeEncodedDomTree(root);
+        return root;
+    }
+
+    parseQHtml(qhtml) {
+        const root = this.parseQHtmlToRoot(qhtml);
         return root.outerHTML;
     }
 
@@ -3599,6 +4567,19 @@ class QComponent extends HTMLElement {
     into(slotId, payload) {
         injectIntoComponentSlot(this, slotId, payload);
         return this;
+    }
+
+    resolveSlots() {
+        resolveComponentSlotsInPlace(this);
+        return this;
+    }
+
+    toTemplate() {
+        return toTemplateComponentInstance(this, { recursive: false });
+    }
+
+    toTemplateRecursive() {
+        return toTemplateComponentInstance(this, { recursive: true });
     }
 
     connectedCallback() {
