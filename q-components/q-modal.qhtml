@@ -16,13 +16,6 @@ q-template q-container-theme-light {
   }
 }
 
-/* usage:
-* q-modal {
-*   header { text { modal header goes here } }
-*   body { text { heres the modal body } }
-*   footer { text { optional footer content } }
-* }
-*/
 q-template q-modal {
   q-modal-component {
     q-modal-instance {
@@ -78,7 +71,6 @@ q-template q-modal-instance {
   }
 }
 
-/* controller for hide() and show() functions */
 q-component q-modal-component {
   function show() {
     this.style.display = "block"

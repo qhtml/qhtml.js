@@ -1,0 +1,23 @@
+q-template q-grid-row {
+  div.w3-row-padding.w3-stretch {
+    slot { content }
+  }
+}
+
+q-template q-grid {
+  q-grid-row {
+    slot { content }
+  }
+}
+
+q-template q-grid-cell-surface {
+  div.w3-col.w3-margin-bottom {
+    slot { content }
+  }
+}
+
+q-template q-grid-cell {
+  q-grid-cell-surface {
+    slot { content }
+  }
+}
