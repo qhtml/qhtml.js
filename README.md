@@ -16,7 +16,7 @@ This README is written for builders who want a quick, reliable way to author UI 
 - Build compile-time templates that render to pure HTML.
 - Optional add-ons: `w3-tags.js` and `bs-tags.js` for shorthand UI markup.
 
-## v5.0.1-alpha changes
+## v5.0 major changes
 
 - Added `q-script { ... }` blocks with return-value replacement and runtime DOM-bound `this`.
 - Added mixed evaluation timing for `q-script`:
@@ -26,6 +26,15 @@ This README is written for builders who want a quick, reliable way to author UI 
   - fixed duplicate slot projection edge cases
   - internal `q-into` carrier nodes remain non-visual
 - Updated docs with a full `q-script` section and examples.
+- Added `q-template template-name`
+- Modified `q-component` runtime behavior to allow for function calling
+- Added `q-signal` to `q-component`
+- Simplification of rigid features
+  - Removed the ability to use `text: "your-text-here"` on all divs to set textContent in favor of `text { some-text }`
+  - Removed the ability to use `content: "text-content"` on all divs to set TextContent in favor of `text { some-text }` or `html { some-html }`
+  - Removed the ability to use `slot: "slot-name"` on all divs to remove slot insertion in favor of `slot-name { content-to-send-to-slot }`
+  - Removed the `"slot { name: "slot-name" }` syntax in favor of just `slot { name }`
+  - q-components now create a `q-into` tag for each slot when rendered unless you call `.resolveSlots()` on the q-component instancew which replaces q-into with its children.
 
 ## Quick Start
 
