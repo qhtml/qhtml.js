@@ -1,4 +1,13 @@
+
 # QHTML.js (Quick HTML)
+
+## This repository is now out-dated and has evolved into **qhtml6** 
+
+- qhtml6 is fully backwards compatible with qhtml5.
+
+## Click here for the <a href="https://github.com/qhtml/qhtml6">qhtml6 Repository</a>
+
+This repository is kept for historical reasons and those who wish to use legacy qhtml5 for whatever reason
 
 > Warning: v5.0 has changes which can break code if migrating from pre-v5.0 q-html.  If you are just upgrading q-html.js but using existing code, then please use the upgrade.html file to upgrade your q-html code to v5.0
 
